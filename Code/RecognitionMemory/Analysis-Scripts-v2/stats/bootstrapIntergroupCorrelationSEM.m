@@ -91,11 +91,13 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
                 valid = (nObsA>=opt.minResp) & (nObsB>=opt.minResp);
 
             case 2 % bootstrap stimuli
+                % Resample stimuli, then average over participants (dim=1)
+                % to get group-level mean per stimulus → [1 × nItems] vectors
                 idxStim = randi(nItems,[nItems 1]);
-                Amean = nanmean(A(:,idxStim),2);
-                Bmean = nanmean(B(:,idxStim),2);
-                nObsA = sum(~isnan(A(:,idxStim)),2);
-                nObsB = sum(~isnan(B(:,idxStim)),2);
+                Amean = nanmean(A(:,idxStim),1);
+                Bmean = nanmean(B(:,idxStim),1);
+                nObsA = sum(~isnan(A(:,idxStim)),1);
+                nObsB = sum(~isnan(B(:,idxStim)),1);
                 valid = (nObsA>=opt.minResp) & (nObsB>=opt.minResp);
 
             otherwise
