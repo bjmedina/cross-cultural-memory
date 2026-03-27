@@ -1,0 +1,1 @@
+%% Restart MATLAB before each singing session%% Make sure VolumeLock is ON%% command shift enter runs a single block of code %% ALL RUN: Add support files to pathaddpath(genpath('~/Tsimane2025/'))%% Auditory Memory Experiment CODE_DIR = '~/Tsimane2025/Code/RecognitionMemory/';addpath(CODE_DIR)wrapperRecognitionMemory_v3

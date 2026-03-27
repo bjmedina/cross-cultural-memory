@@ -1,0 +1,33 @@
+Demography for 3065-SRM-SBO_Skandar_Esther
+
+start_time_c :		   12-Aug-2025 16:49:21
+experimenter_s :		 Esther
+fname_s :		 Skandar
+patronym_s :		 Villarroel
+matronym_s :		 Mendia
+community_s :		 San Borja
+birth_s :		 San Borja
+grewup_s :		 San Borja
+female_b :		 0
+department_n :		 1.00
+age_n :		 20.00
+education_n :		 12.00
+town_n :		 20.00
+economic_s :		 F=Estudiante
+playinstrument_b :		 1
+playinstrument_n :		 3.00
+playwind_t :		 0
+playstring_t :		 0
+playdrum_t :		 2
+sing_t :		 1
+sing_when_s :		 Hace 5 dias
+music_genre_s :		  H=Ranchera
+dance_b :		 1
+dancewhen_s :		 Hace dos dias
+church_n :		 3.00
+church_type_n :		 0.00
+sing_church_b :		 1
+sing_group_t :		 1
+computer_t :		 1
+phone_t :		 1
+tv_t :		 1

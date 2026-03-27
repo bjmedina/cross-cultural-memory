@@ -1,0 +1,244 @@
+function [sh, sw, sh_odd, sh_oct, sh_low, sh_unr, si_str, si_cmp, si_log] = ...
+    StraightCopy2_expmt_conds_v3(x, fs, F0_downshift, lowest_harmonic, stretch_factor, cmp_factor, log_spacing, plot_sg)
+% FUNCTION [SH, SW, SH_ODD, SH_OCT, SH_LOW, SH_UNR, SI_STR, SI_CMP, SI_LOG] = ...
+%    STRAIGHTCOPY2_EXPMT_CONDS_V3(X, FS, F0_DOWNSHIFT, LOWEST_HARMONIC, STRETCH_FACTOR, CMP_FACTOR, LOG_SPACING, PLOT_SG)
+%   This function generates different versions of a speech utterance, to be
+%   used in segregation experiments
+%    x is a speech waveform at sample rate fs.
+%    Use STRAIGHT to decompose into voiced and unvoiced parts, and
+%    produce three new reconstructions, with a sinusoidal model of
+%    the voiced portion:
+%    sh is a harmonic reconstruction, intended to be very close
+%      to the original.
+%    sw is a simulated whisper with noise replacing the voiced
+%      component, and the combined result gently high-pass filtered
+%      to be 3 dB down at 1600 Hz, 10 dB down at 1000 Hz, and 40 dB
+%      down at 100 Hz.
+%    sh_odd contains only odd harmonics.
+%    sh_oct contains only octave-spaced harmonics.
+%    sh_low is a harmonic version with f0 lowered by a factor of
+%       F0_DOWNSHIFT
+%    sh_unr is a harmonic version containing only high-numbered harmonics
+%       (the lowest harmonic number is LOWEST_HARMONIC) with f0 lowered by a factor of 
+%       LOWEST_HARMONIC such that the lowest harmonic is the F0 track of
+%       the original.
+%    si_str is a "stretched" inharmonic version with frequency components
+%       altered by n*(n-1)*STRETCH_FACTOR*F0 over their harmonic
+%       frequency
+%    si_cmp is a "compressed" inharmonic version with frequency components
+%       altered by n*(n-1)*CMP_FACTOR*F0 over their harmonic
+%       frequency (CMP_FACTOR should be negative)
+%    si_log is a log-spaced inharmonic version with adjacent frequency
+%       components separated by the factor LOG_SPACING
+%
+%
+% 2012-03-30 Dan Ellis dpwe@ee.columbia.edu
+% modified 2012-08-31 by Josh McDermott to do multiple variants at once
+% modified 2012-10-11 by Josh McDermott to add a second jittered variant
+% modified 2013-03-24 by Josh McDermott to incorporate alternative variants
+
+
+%%  After testScriptForR2.m
+%   Test script for new framework
+%   by Hideki Kawahara
+%   26/Mar./2012
+
+%[x,fs] = wavread('../baseTamdemSTRAIGHTV009ag3/openTheCrate.wav');
+
+r = exF0candidatesTSTRAIGHTGB(x,fs);
+rc = r;
+rc = autoF0Tracking(r,x);
+rc.vuv = refineVoicingDecision(x,rc);
+sourceStructure = aperiodicityRatioSigmoid(x,rc,1,2,0);
+filterStructure = exSpectrumTSTRAIGHTGB(x,fs,sourceStructure);
+%%
+
+testSubstrate.samplingFrequency = sourceStructure.samplingFrequency;
+testSubstrate.sigmoidParameter = sourceStructure.sigmoidParameter;
+testSubstrate.vuv = sourceStructure.vuv;
+testSubstrate.f0 = sourceStructure.f0;
+testSubstrate.temporalPositions = sourceStructure.temporalPositions;
+testSubstrate.cutOffListFix = sourceStructure.cutOffListFix;
+testSubstrate.targetF0 = sourceStructure.targetF0;
+testSubstrate.exponent = sourceStructure.exponent;
+testSubstrate.spectrogramSTRAIGHT = filterStructure.spectrogramSTRAIGHT;
+
+testSubstrate.transitionWidth = 0.15;
+testSubstrate.sourceOption = (1-0.5*sourceStructure.vuv');
+
+%syn_Normal = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+%    @minimumPhaseResponse,@f0AdaptiveDClessPulseR2,@noiseBurstInFrequencyR2, ...
+%    @generateBaseShifterSigmoid,testSubstrate);
+
+option.deterministicHandleOption.biasFactor = 0;
+option.feedingHandleOption.frameRateInSecond = 0.005;
+option.deterministicHandleOption.sourceType = 'cos';
+
+% Regular resynthesis
+syn_Harm = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+% Noise part only
+syn_Noise = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@noiseBurstInFrequencyWhisper,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+option.deterministicHandleOption.sourceType = 'cosPlusBias';
+
+% Inharmonic - stretched
+if length(stretch_factor)==1
+    harm_nums = 1:60;
+    stretch_factors = harm_nums.*(harm_nums-1)*stretch_factor;
+    option.deterministicHandleOption.biasFactor = stretch_factors;
+else
+    error([],'There should be a single shift factor');
+end
+syn_Inharm_stretch = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+% Inharmonic - compressed
+if length(cmp_factor)==1
+    harm_nums = 1:60;
+    cmp_factors = harm_nums.*(harm_nums-1)*cmp_factor;
+    option.deterministicHandleOption.biasFactor = cmp_factors;
+else
+    error([],'There should be a single compression factor');
+end
+syn_Inharm_cmp = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+%octave-spaced
+option.deterministicHandleOption.sourceType = 'cosLogSpaced';
+option.deterministicHandleOption.biasFactor = 2;
+syn_Octave_spaced = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+%log-spaced
+option.deterministicHandleOption.sourceType = 'cosLogSpaced';
+option.deterministicHandleOption.biasFactor = log_spacing;
+syn_Log_spaced = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+%odd harmonics
+option.deterministicHandleOption.sourceType = 'cosOddOnly';
+syn_Harmonic_Odd = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+%low F0
+option.deterministicHandleOption.sourceType = 'cosLowF0';
+option.deterministicHandleOption.biasFactor = F0_downshift;
+syn_Harmonic_LowF0 = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+%unresolved, low F0
+option.deterministicHandleOption.sourceType = 'cosUnres';
+option.deterministicHandleOption.biasFactor = [lowest_harmonic F0_downshift];
+syn_Harmonic_Unres = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@deterministicExcitationR3,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+% Simulated whisper
+syn_Whisper = generalSTRAIGHTsynthesisFrameworkR2(@interpFetcherFixRate, ...
+    @minimumPhaseResponse,@noiseBurstInFrequencyWhisper,@noiseBurstInFrequencyR2, ...
+    @doNothingShifter,testSubstrate,option);
+
+%%
+
+sh = syn_Harm.synthesisOut;
+sh_odd = syn_Harmonic_Odd.synthesisOut;
+sh_oct = syn_Octave_spaced.synthesisOut;
+sh_low = syn_Harmonic_LowF0.synthesisOut;
+sh_unr = syn_Harmonic_Unres.synthesisOut;
+si_str = syn_Inharm_stretch.synthesisOut;
+si_cmp = syn_Inharm_cmp.synthesisOut;
+si_log = syn_Log_spaced.synthesisOut;
+
+% filter is HPF'd version of voice-spectrum noise-excited
+% 2nd order butterworth with 3dB point at 1200 Hz is empirically set
+% 2012-08-29 dpwe@ee.columbia.edu
+f_c = 1200;
+f_nyq = fs/2;
+filt_order = 2;
+[fb,fa] = butter(filt_order, f_c/f_nyq, 'high');
+% but back off the zeros from the unit circle??
+zero_radius = 0.95;
+fb2 = fb(1)*poly([zero_radius;zero_radius]);
+sw = filter(fb2,fa,syn_Whisper.synthesisOut);
+
+
+if plot_sg
+    max_f_Hz = 4000;
+    sg_Harm = stftSpectrogramStructure(sh,fs,80,1,'nuttallwin12');
+    sg_Whisper = stftSpectrogramStructure(sw,fs,80,1,'nuttallwin12');
+    sg_HarmOdd = stftSpectrogramStructure(sh_odd,fs,80,1,'nuttallwin12');
+    sg_Octave = stftSpectrogramStructure(sh_oct,fs,80,1,'nuttallwin12');
+    sg_HarmLow = stftSpectrogramStructure(sh_low,fs,80,1,'nuttallwin12');
+    sg_HarmUnr = stftSpectrogramStructure(sh_unr,fs,80,1,'nuttallwin12');
+    sg_Stretched = stftSpectrogramStructure(si_str,fs,80,1,'nuttallwin12');
+    sg_Compressed = stftSpectrogramStructure(si_cmp,fs,80,1,'nuttallwin12');
+    sg_Log = stftSpectrogramStructure(si_log,fs,80,1,'nuttallwin12');
+    
+    %figure;
+    subplot(331);
+    imagesc([0 sg_Harm.temporalPositions(end)],[0 fs/2],max(-90,sg_Harm.dBspectrogram));
+    axis([0 sg_Harm.temporalPositions(end) 0 max_f_Hz]);
+    title('Harmonic synthesis');
+    axis('xy');colorbar; grid
+    
+    subplot(332);
+    imagesc([0 sg_Whisper.temporalPositions(end)],[0 fs/2],max(-90,sg_Whisper.dBspectrogram));
+    axis([0 sg_Whisper.temporalPositions(end) 0 max_f_Hz]);
+    title('Sim Whisper');
+    axis('xy');colorbar; grid
+    
+    subplot(333);
+    imagesc([0 sg_HarmOdd.temporalPositions(end)],[0 fs/2],max(-90,sg_HarmOdd.dBspectrogram));
+    axis([0 sg_HarmOdd.temporalPositions(end) 0 max_f_Hz]);
+    title('Odd Harmonics');
+    axis('xy');colorbar; grid
+
+    subplot(334);
+    imagesc([0 sg_Octave.temporalPositions(end)],[0 fs/2],max(-90,sg_Octave.dBspectrogram));
+    axis([0 sg_Octave.temporalPositions(end) 0 max_f_Hz]);
+    title('Octave-spaced');
+    axis('xy');colorbar; grid
+
+    subplot(335);
+    imagesc([0 sg_HarmLow.temporalPositions(end)],[0 fs/2],max(-90,sg_HarmLow.dBspectrogram));
+    axis([0 sg_HarmLow.temporalPositions(end) 0 max_f_Hz]);
+    title(['Lower F0 by Factor of ',num2str(F0_downshift)]);
+    axis('xy');colorbar; grid
+
+    subplot(336);
+    imagesc([0 sg_HarmUnr.temporalPositions(end)],[0 fs/2],max(-90,sg_HarmUnr.dBspectrogram));
+    axis([0 sg_HarmUnr.temporalPositions(end) 0 max_f_Hz]);
+    title(['Unresolved - Lowest Harmonic # = ',num2str(lowest_harmonic)]);
+    axis('xy');colorbar; grid
+
+    subplot(337);
+    imagesc([0 sg_Stretched.temporalPositions(end)],[0 fs/2],max(-90,sg_Stretched.dBspectrogram));
+    axis([0 sg_Stretched.temporalPositions(end) 0 max_f_Hz]);
+    title(['Stretched Inharmonic, biasFactor = ',num2str(stretch_factor)]);
+    axis('xy');colorbar; grid
+
+    subplot(338);
+    imagesc([0 sg_Compressed.temporalPositions(end)],[0 fs/2],max(-90,sg_Compressed.dBspectrogram));
+    axis([0 sg_Compressed.temporalPositions(end) 0 max_f_Hz]);
+    title(['Compressed Inharmonic, biasFactor = ',num2str(cmp_factor)]);
+    axis('xy');colorbar; grid
+
+    subplot(339);
+    imagesc([0 sg_Log.temporalPositions(end)],[0 fs/2],max(-90,sg_Log.dBspectrogram));
+    axis([0 sg_Log.temporalPositions(end) 0 max_f_Hz]);
+    title(['Log-Spaced Inharmonic, Spacing = ',num2str(log_spacing)]);
+    axis('xy');colorbar; grid
+    
+end
+

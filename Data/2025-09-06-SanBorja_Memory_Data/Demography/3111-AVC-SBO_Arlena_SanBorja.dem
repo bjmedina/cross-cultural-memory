@@ -1,0 +1,33 @@
+Demography for 3111-AVC-SBO_Arlena_SanBorja
+
+start_time_c :		   03-Sep-2025 19:52:50
+experimenter_s :		 Esther
+fname_s :		 Arlena
+patronym_s :		 Vargas
+matronym_s :		 Caceres
+community_s :		 San Borja
+birth_s :		 San Borja
+grewup_s :		 San Borja
+female_b :		 1
+department_n :		 1.00
+age_n :		 45.00
+education_n :		 4.00
+town_n :		 45.00
+economic_s :		 B
+playinstrument_b :		 0
+playinstrument_n :		 0.00
+playwind_t :		 0
+playstring_t :		 0
+playdrum_t :		 0
+sing_t :		 1
+sing_when_s :		 Esta manana en el trabajo
+music_genre_s :		 B
+dance_b :		 1
+dancewhen_s :		 El 2023 en diciembre
+church_n :		 2.00
+church_type_n :		 0.00
+sing_church_b :		 1
+sing_group_t :		 1
+computer_t :		 1
+phone_t :		 1
+tv_t :		 1

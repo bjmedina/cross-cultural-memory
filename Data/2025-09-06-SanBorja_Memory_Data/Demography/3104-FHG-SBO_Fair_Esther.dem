@@ -1,0 +1,33 @@
+Demography for 3104-FHG-SBO_Fair_Esther
+
+start_time_c :		   02-Sep-2025 20:55:54
+experimenter_s :		 Esther
+fname_s :		 Fair
+patronym_s :		 Heredia
+matronym_s :		 Guzman
+community_s :		 San Borja
+birth_s :		 San Borja
+grewup_s :		 San Borja
+female_b :		 0
+department_n :		 1.00
+age_n :		 19.00
+education_n :		 12.00
+town_n :		 5.00
+economic_s :		 E= Transporte
+playinstrument_b :		 1
+playinstrument_n :		 9.00
+playwind_t :		 1
+playstring_t :		 2
+playdrum_t :		 2
+sing_t :		 1
+sing_when_s :		 Esta tarde estaba cantando con su guitarra
+music_genre_s :		 H=Rancheras
+dance_b :		 1
+dancewhen_s :		 Hace una semana
+church_n :		 3.00
+church_type_n :		 0.00
+sing_church_b :		 1
+sing_group_t :		 2
+computer_t :		 2
+phone_t :		 1
+tv_t :		 1

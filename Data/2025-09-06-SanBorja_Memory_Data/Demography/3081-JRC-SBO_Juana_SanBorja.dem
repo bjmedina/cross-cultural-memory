@@ -1,0 +1,33 @@
+Demography for 3081-JRC-SBO_Juana_SanBorja
+
+start_time_c :		   28-Aug-2025 09:55:55
+experimenter_s :		 Esther
+fname_s :		 Juana
+patronym_s :		 Rivero
+matronym_s :		 Cuapo
+community_s :		 San Borja
+birth_s :		 San Borja
+grewup_s :		 Yucumo
+female_b :		 1
+department_n :		 1.00
+age_n :		 41.00
+education_n :		 7.00
+town_n :		 11.00
+economic_s :		 B
+playinstrument_b :		 0
+playinstrument_n :		 0.00
+playwind_t :		 0
+playstring_t :		 0
+playdrum_t :		 0
+sing_t :		 1
+sing_when_s :		 El Domingo en la iglesia
+music_genre_s :		 E
+dance_b :		 1
+dancewhen_s :		 El Domingo
+church_n :		 3.00
+church_type_n :		 1.00
+sing_church_b :		 1
+sing_group_t :		 1
+computer_t :		 1
+phone_t :		 1
+tv_t :		 1

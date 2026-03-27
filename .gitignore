@@ -1,0 +1,26 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Audio files (too large for git)
+*.WAV
+*.wav
+*.mp3
+*.aiff
+*.aif
+*.flac
+*.ogg
+*.m4a
+bolivia_2025_sound_recordings/
+bolivia_2025_sound_recordings-*.zip
+
+# MATLAB generated files
+*.asv
+*.mex*
+*.fig
+*.slx.r*
+
+# Large zip archives at root
+*.zip
