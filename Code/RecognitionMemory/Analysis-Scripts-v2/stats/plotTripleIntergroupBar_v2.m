@@ -1,33 +1,34 @@
-function plotTripleIntergroupBar_v2(ac, ab, bc, condition, trial_type, baseDir, pmat)
+function plotTripleIntergroupBar_v2(pair1, pair2, pair3, condition, trial_type, baseDir, pmat)
 % plotTripleIntergroupBar_v2
 %   Compare intergroup itemwise correlations (raw & attenuation-corrected)
 %   using 95% CIs from bootstrap distributions. Optionally shows p-value
 %   brackets from pairedBootstrapCompareCorrelations.
 %
-%   v2: Supports both old simulation outputs (r_raw, sem_raw) and new
-%   bootstrap outputs (point_raw, ci_raw).
+%   Arguments pair1, pair2, pair3 are plotted left-to-right.
+%   Default call order from the pipeline: (ab, ac, bc)
+%     bar 1 = US-San Borja
+%     bar 2 = US-Tsimane'  (center)
+%     bar 3 = San Borja-Tsimane'
 %
-%   Bryan Medina -- Bolivia 2025 / Statistical fixes Feb 2026
+%   Bryan Medina -- Bolivia 2025 / Statistical fixes Feb-Mar 2026
 
     if nargin < 7, pmat = []; end
 
     % -----------------------------
-    % prepare data (handle both old and new output formats)
+    % prepare data
     % -----------------------------
-    % Order matches the function arguments: (ac, ab, bc) = [A-C, A-B, B-C]
-    % where A=US, B=San Borja, C=Tsimane
-    pairs = {'US-Tsimane', 'US-San Borja', 'San Borja-Tsimane'};
+    pairs = {'US-San Borja', 'US-Tsimane''', 'San Borja-Tsimane'''};
     x = 1:3; w = 0.35;
 
-    [rawAC, corrAC, ciRawAC, ciCorrAC] = extract_vals(ac);
-    [rawAB, corrAB, ciRawAB, ciCorrAB] = extract_vals(ab);
-    [rawBC, corrBC, ciRawBC, ciCorrBC] = extract_vals(bc);
+    [raw1, corr1, ciRaw1, ciCorr1] = extract_vals(pair1);
+    [raw2, corr2, ciRaw2, ciCorr2] = extract_vals(pair2);
+    [raw3, corr3, ciRaw3, ciCorr3] = extract_vals(pair3);
 
-    rawVals  = [rawAC,  rawAB,  rawBC];
-    corrVals = [corrAC, corrAB, corrBC];
+    rawVals  = [raw1,  raw2,  raw3];
+    corrVals = [corr1, corr2, corr3];
 
-    ciRaw  = [ciRawAC; ciRawAB; ciRawBC];     % 3x2
-    ciCorr = [ciCorrAC; ciCorrAB; ciCorrBC];   % 3x2
+    ciRaw  = [ciRaw1; ciRaw2; ciRaw3];       % 3x2
+    ciCorr = [ciCorr1; ciCorr2; ciCorr3];     % 3x2
 
     errRawNeg  = rawVals(:)  - ciRaw(:,1);
     errRawPos  = ciRaw(:,2)  - rawVals(:);
@@ -56,7 +57,7 @@ function plotTripleIntergroupBar_v2(ac, ab, bc, condition, trial_type, baseDir, 
         'Interpreter','none');
 
     allUpper = [rawVals(:) + errRawPos; corrVals(:) + errCorrPos];
-    yMax = max(allUpper, [], 'all', 'omitnan');
+    yMax = max(allUpper(:), [], 'omitnan');
     if isnan(yMax), yMax = 1; end
 
     grid on; box off;
@@ -113,9 +114,7 @@ end
 % ---- helpers ----
 
 function [rRaw, rCorr, ciRaw, ciCorr] = extract_vals(s)
-% Extract raw/corrected values and CIs from either old (sim) or new (boot) format.
     if isfield(s, 'point_raw')
-        % New bootstrap format (from bootstrapIntergroupCorrelationSEM)
         rRaw  = s.point_raw;
         rCorr = s.point_corr;
         if isfield(s, 'ci_raw') && numel(s.ci_raw) == 2
@@ -129,7 +128,6 @@ function [rRaw, rCorr, ciRaw, ciCorr] = extract_vals(s)
             ciCorr = [rCorr rCorr];
         end
     elseif isfield(s, 'r_raw')
-        % Old simulation format (from simulateIntergroupItemwiseCorrelation)
         rRaw  = s.r_raw;
         rCorr = s.r_corrected;
         if isfield(s, 'sem_raw')
