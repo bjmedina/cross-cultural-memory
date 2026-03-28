@@ -10,7 +10,7 @@
 %               Diversos (NUM, NUV, CVR)
 %
 % For each condition the pipeline:
-%   1. Computes within-site split-half reliability (Spearman, stimulus split)
+%   1. Computes within-site split-half reliability (Spearman, participant split)
 %   2. Bootstraps cross-site itemwise correlations (raw + attenuation-corrected)
 %   3. Runs paired-bootstrap significance tests comparing the three site pairs
 %   4. Saves bar-chart figures to Data/RecognitionMemory/Results/figures/<condition>/
@@ -45,9 +45,10 @@ SanBorja = {'SBO', 'SNB', 'SBJ'};
 Tsimane  = {'NVM', 'MAJ', 'MAN', 'NUM', 'NUV', 'CVR'};
 
 % -------------------------------------------------------------------------
-% 3. Conditions to analyse
+% 3. Configuration
 % -------------------------------------------------------------------------
 conditions = {'Globalized-Music', 'Industrial-Nature'};
+minResp    = 2;  % min non-NaN observations per stimulus per group per bootstrap draw
 
 % -------------------------------------------------------------------------
 % 4. Run
@@ -67,7 +68,7 @@ for ci = 1:numel(conditions)
         fprintf('\n--- Trial type: %s ---\n', trial_type);
 
         results.(condKey).(trial_type) = runIntergroupCorrelationPipeline( ...
-            baseDir, trial_type, cond, US, SanBorja, Tsimane);
+            baseDir, trial_type, cond, US, SanBorja, Tsimane, 'minResp', minResp);
     end
 end
 
