@@ -29,7 +29,8 @@ addpath(fullfile(scriptDir, 'stats'));
 
 % Data directory: relative to this script's location
 baseDir = fullfile(scriptDir, '..', '..', '..', 'Data', 'RecognitionMemory', 'Results');
-baseDir = char(java.io.File(baseDir).getCanonicalPath());  % resolve symlinks / ..
+% Resolve any '..' in the path (works in MATLAB 2018b without Java)
+origDir = pwd; cd(baseDir); baseDir = pwd; cd(origDir);
 
 if ~exist(baseDir, 'dir')
     error('Data directory not found: %s\nCheck the path relative to this script.', baseDir);
