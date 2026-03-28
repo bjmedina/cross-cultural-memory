@@ -28,7 +28,7 @@ function outs = calculateSplitHalfReliability(baseDir, placeCodes, condition, mi
 %   Bryan Medina ? October 30 2025
 
     if nargin < 7, splitDim = 1; end  % Default: split across participants
-    display(strjoin(placeCodes,'_'));
+    fprintf('Computing split-half reliability for: %s\n', strjoin(placeCodes,'_'));
     % -----------------------------
     % 1) Get filtered files
     % -----------------------------
@@ -101,8 +101,8 @@ function outs = calculateSplitHalfReliability(baseDir, placeCodes, condition, mi
     % -----------------------------
     % 4) Compute split-half reliabilities
     % -----------------------------
-    [r_hit, r_hit_std] = estimateSplitHalfFlexible(hits, nSplits, splitDim);
-    [r_fa,  r_fa_std]  = estimateSplitHalfFlexible(fas,  nSplits, splitDim);
+    [r_hit, r_hit_std] = estimateSplitHalfFlexible(hits, nSplits, splitDim, 'Spearman');
+    [r_fa,  r_fa_std]  = estimateSplitHalfFlexible(fas,  nSplits, splitDim, 'Spearman');
 
     % Spearman?Brown correction
     sb_hit = (2 * r_hit) / (1 + r_hit);

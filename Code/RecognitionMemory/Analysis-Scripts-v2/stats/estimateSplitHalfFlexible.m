@@ -1,15 +1,17 @@
-function [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim)
+function [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim, corrType)
 % estimateSplitHalfFlexible
 %   Compute split-half reliability across participants or stimuli.
 %
-%   [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim)
+%   [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim, corrType)
 %
 %   splitDim = 1 ? split across participants (default)
 %   splitDim = 2 ? split across stimuli
+%   corrType  = 'Spearman' (default) or 'Pearson'
 %
 %   Bryan Medina ? Bolivia 2025
 
     if nargin < 3, splitDim = 1; end
+    if nargin < 4, corrType = 'Spearman'; end
     nSplits = max(1, nSplits);
     [nSub, nItems] = size(data);
     rs = nan(nSplits, 1);
@@ -46,7 +48,7 @@ function [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim
         end
 
         try
-            r_temp = corr(m1(valid), m2(valid), 'Rows', 'pairwise');
+            r_temp = corr(m1(valid), m2(valid), 'Type', corrType, 'Rows', 'pairwise');
             if ~isempty(r_temp) && ~isnan(r_temp)
                 rs(s) = r_temp;
             end
@@ -81,7 +83,7 @@ end
 % %   [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim)
 % %
 % %   Inputs:
-% %     data     - matrix [nSub × nItems], with NaNs for missing entries
+% %     data     - matrix [nSub ï¿½ nItems], with NaNs for missing entries
 % %     nSplits  - number of random splits (e.g. 1000)
 % %     splitDim - dimension to split along:
 % %                  1 = split across participants (default)
@@ -150,11 +152,11 @@ end
 %     end
 %     grid on; box off;
 % 
-%     % annotate mean ± std
+%     % annotate mean ï¿½ std
 %     xline(mean_r, 'k-', 'LineWidth',1.5);
 %     xline(mean_r + std_r, '--k', 'LineWidth',1);
 %     xline(mean_r - std_r, '--k', 'LineWidth',1);
 %     ylimCurr = ylim;
-%     text(mean_r, ylimCurr(2)*0.9, sprintf('mean = %.3f ± %.3f', mean_r, std_r), ...
+%     text(mean_r, ylimCurr(2)*0.9, sprintf('mean = %.3f ï¿½ %.3f', mean_r, std_r), ...
 %          'HorizontalAlignment','center', 'FontSize',10, 'FontWeight','bold');
 % end

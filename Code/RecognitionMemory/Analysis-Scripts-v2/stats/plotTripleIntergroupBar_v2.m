@@ -14,7 +14,9 @@ function plotTripleIntergroupBar_v2(ac, ab, bc, condition, trial_type, baseDir, 
     % -----------------------------
     % prepare data (handle both old and new output formats)
     % -----------------------------
-    pairs = {'Prolific-San Borja','Prolific-Tsimane','Tsimane-San Borja'};
+    % Order matches the function arguments: (ac, ab, bc) = [A-C, A-B, B-C]
+    % where A=US, B=San Borja, C=Tsimane
+    pairs = {'US-Tsimane', 'US-San Borja', 'San Borja-Tsimane'};
     x = 1:3; w = 0.35;
 
     [rawAC, corrAC, ciRawAC, ciCorrAC] = extract_vals(ac);
