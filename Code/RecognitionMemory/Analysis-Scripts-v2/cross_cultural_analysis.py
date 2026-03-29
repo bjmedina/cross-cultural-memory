@@ -43,6 +43,7 @@ MIN_RESP        = 2      # minimum non-NaN observations per stimulus per group
 N_BOOT          = 5000
 N_SPLITS        = 10000
 EPSILON         = 1e-5   # rate clipping to avoid infinite z-scores
+CI_TYPE         = 'sem'  # 'sem' (±1 SEM) or '95ci' (percentile 95% CI)
 
 
 # ---------------------------------------------------------------------------
@@ -282,10 +283,13 @@ def intergroup_correlation_bootstrap(matA, matB, items_a, items_b,
     z = np.arctanh(np.clip(r_boot, -0.999999, 0.999999))
     mean_boot = np.tanh(np.mean(z)) if len(z) > 0 else np.nan
 
+    sem = np.std(r_boot, ddof=1) if len(r_boot) > 1 else np.nan
+
     return {
         'point': r_point,
         'mean_boot': mean_boot,
         'ci': list(ci),
+        'sem': sem,
         'n_items': int(valid.sum()),
         'r_boot': r_boot,
     }
@@ -382,15 +386,27 @@ def paired_bootstrap_compare(matA, matB, matC, items_a, items_b, items_c,
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
-def plot_intergroup_bars(ab, ac, bc, pmat, condition, trial_type, out_dir):
-    """Bar chart: [US-San Borja, US-Tsimane', San Borja-Tsimane']."""
+def plot_intergroup_bars(ab, ac, bc, pmat, condition, trial_type, out_dir,
+                         ci_type=CI_TYPE):
+    """Bar chart: [US-San Borja, US-Tsimane', San Borja-Tsimane'].
+
+    ci_type : 'sem'  -> symmetric ±1 SEM error bars (bootstrap SD)
+              '95ci' -> asymmetric 95% percentile CI error bars
+    """
     labels = ['US-San Borja', "US-Tsimane'", "San Borja-Tsimane'"]
     vals = [ab['point'], ac['point'], bc['point']]
-    ci_lo = [ab['ci'][0], ac['ci'][0], bc['ci'][0]]
-    ci_hi = [ab['ci'][1], ac['ci'][1], bc['ci'][1]]
 
-    err_neg = [max(0.0, v - lo) for v, lo in zip(vals, ci_lo)]
-    err_pos = [max(0.0, hi - v) for v, hi in zip(vals, ci_hi)]
+    if ci_type == 'sem':
+        sems = [ab['sem'], ac['sem'], bc['sem']]
+        err_neg = [max(0.0, s) for s in sems]
+        err_pos = list(err_neg)
+        err_label = '±1 SEM (bootstrap)'
+    else:
+        ci_lo = [ab['ci'][0], ac['ci'][0], bc['ci'][0]]
+        ci_hi = [ab['ci'][1], ac['ci'][1], bc['ci'][1]]
+        err_neg = [max(0.0, v - lo) for v, lo in zip(vals, ci_lo)]
+        err_pos = [max(0.0, hi - v) for v, hi in zip(vals, ci_hi)]
+        err_label = '95% CI (bootstrap)'
 
     fig, ax = plt.subplots(figsize=(7, 5))
     x = np.arange(3)
@@ -418,7 +434,8 @@ def plot_intergroup_bars(ab, ac, bc, pmat, condition, trial_type, out_dir):
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=11)
     ax.set_ylabel('Itemwise Spearman correlation', fontsize=12)
-    ax.set_title(f'Intergroup {trial_type.upper()} correlations — {condition}', fontsize=13)
+    ax.set_title(f'Intergroup {trial_type.upper()} correlations — {condition}\n'
+                 f'({err_label})', fontsize=12)
     ax.set_ylim(bottom=0)
     ax.grid(axis='y', alpha=0.3)
     ax.spines['top'].set_visible(False)
@@ -526,7 +543,8 @@ def run_pipeline(data_dir, condition, sites, min_resp=MIN_RESP):
               f'{A}-{B} vs {B}-{C}: {pvals["AB_vs_BC"]:.4f}  |  '
               f'{A}-{C} vs {B}-{C}: {pvals["AC_vs_BC"]:.4f}')
 
-        plot_intergroup_bars(ab, ac, bc, pvals['pmat'], condition, trial_type, out_dir)
+        plot_intergroup_bars(ab, ac, bc, pvals['pmat'], condition, trial_type, out_dir,
+                             ci_type=CI_TYPE)
 
         results[trial_type] = {'ab': ab, 'ac': ac, 'bc': bc, 'pvals': pvals}
 
