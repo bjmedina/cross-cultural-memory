@@ -389,8 +389,8 @@ def plot_intergroup_bars(ab, ac, bc, pmat, condition, trial_type, out_dir):
     ci_lo = [ab['ci'][0], ac['ci'][0], bc['ci'][0]]
     ci_hi = [ab['ci'][1], ac['ci'][1], bc['ci'][1]]
 
-    err_neg = [v - lo for v, lo in zip(vals, ci_lo)]
-    err_pos = [hi - v for v, hi in zip(vals, ci_hi)]
+    err_neg = [max(0.0, v - lo) for v, lo in zip(vals, ci_lo)]
+    err_pos = [max(0.0, hi - v) for v, hi in zip(vals, ci_hi)]
 
     fig, ax = plt.subplots(figsize=(7, 5))
     x = np.arange(3)
