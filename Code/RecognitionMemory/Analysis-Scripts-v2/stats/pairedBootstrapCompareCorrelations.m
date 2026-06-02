@@ -23,14 +23,27 @@ function pvals = pairedBootstrapCompareCorrelations(outsA, outsB, outsC, trialTy
 %
 %   Output:
 %     pvals : struct with fields:
-%       .AB_vs_AC : p-value for r(A,B) != r(A,C)
-%       .AB_vs_BC : p-value for r(A,B) != r(B,C)
-%       .AC_vs_BC : p-value for r(A,C) != r(B,C)
-%       .pmat     : 3x3 symmetric matrix (bar order: [AB, AC, BC])
+%       .AB_vs_AC : recentered-null p-value for r(A,B) != r(A,C)
+%       .AB_vs_BC : recentered-null p-value for r(A,B) != r(B,C)
+%       .AC_vs_BC : recentered-null p-value for r(A,C) != r(B,C)
+%       .pmat     : 3x3 symmetric matrix (recentered-null; bar order [AB,AC,BC])
+%       .straddle : struct holding legacy percentile-style p-values and pmat
 %       .diffs    : struct with bootstrap difference distributions
 %       .ci       : struct with 95% CIs for each difference
+%       .observed : struct with sample r(A,B), r(A,C), r(B,C)
+%       .observed_diffs : struct with sample r(A,B)-r(A,C) etc.
 %
-%   Bryan Medina -- Feb 2026 (statistical fix), Mar 2026 (minResp, bar order)
+%   Two-sided p-values are reported under two definitions:
+%     (1) Recentered-null (default, .AB_vs_AC etc.): construct a null by
+%         subtracting the bootstrap mean from each diff, then compute
+%         P(|null| >= |observed_diff|). Bootstrap analogue of a permutation
+%         test under H0 : delta = 0.
+%     (2) Straddle-zero (.straddle.*): p = 2*min(P(d>0), P(d<0)). Legacy
+%         percentile-style p-value; biased under skew at small N. Kept for
+%         comparability with prior pipeline runs.
+%
+%   Bryan Medina -- Feb 2026 (statistical fix), Mar 2026 (minResp, bar order),
+%                   May 2026 (recentered-null p-value)
 
     % ---------- parse options ----------
     p = inputParser;
@@ -140,17 +153,41 @@ function pvals = pairedBootstrapCompareCorrelations(outsA, outsB, outsC, trialTy
     diff_AB_BC = r_AB_boot - r_BC_boot;  % r(A,B) - r(B,C)
     diff_AC_BC = r_AC_boot - r_BC_boot;  % r(A,C) - r(B,C)
 
-    % ---------- two-sided p-values ----------
+    % observed differences (from the original sample)
+    d_AB_AC_obs = r_AB_obs - r_AC_obs;
+    d_AB_BC_obs = r_AB_obs - r_BC_obs;
+    d_AC_BC_obs = r_AC_obs - r_BC_obs;
+
+    % ---------- two-sided p-values: percentile / straddle-zero variant ----------
+    % p = 2*min(P(d>0), P(d<0)). Asks: does the bootstrap CI of the diff
+    % cross zero? Biased under skew at small N. Kept for backwards
+    % compatibility with prior pipeline outputs.
     p_AB_AC = compute_2sided_p(diff_AB_AC);
     p_AB_BC = compute_2sided_p(diff_AB_BC);
     p_AC_BC = compute_2sided_p(diff_AC_BC);
 
-    % ---------- build p-value matrix ----------
-    % Bar order in plots: [AB, AC, BC] (indices 1, 2, 3)
+    % ---------- two-sided p-values: recentered-null variant ----------
+    % Construct a null distribution by recentering each bootstrap diff
+    % distribution at zero (subtract its mean). Compare |observed diff|
+    % against |null|. This is the rigorous bootstrap analogue of a
+    % permutation test under H0: true_diff = 0.
+    p_AB_AC_null = compute_recentered_p(diff_AB_AC, d_AB_AC_obs);
+    p_AB_BC_null = compute_recentered_p(diff_AB_BC, d_AB_BC_obs);
+    p_AC_BC_null = compute_recentered_p(diff_AC_BC, d_AC_BC_obs);
+
+    % ---------- build p-value matrix (default = recentered-null) ----------
+    % Bar order in plots: [AB, AC, BC] (indices 1, 2, 3).
+    % pmat uses the recentered-null variant because it is the test we
+    % recommend reporting. pmat_straddle holds the legacy percentile-style p.
     pmat = zeros(3);
-    pmat(1,2) = p_AB_AC; pmat(2,1) = p_AB_AC;  % AB vs AC
-    pmat(1,3) = p_AB_BC; pmat(3,1) = p_AB_BC;  % AB vs BC
-    pmat(2,3) = p_AC_BC; pmat(3,2) = p_AC_BC;  % AC vs BC
+    pmat(1,2) = p_AB_AC_null; pmat(2,1) = p_AB_AC_null;  % AB vs AC
+    pmat(1,3) = p_AB_BC_null; pmat(3,1) = p_AB_BC_null;  % AB vs BC
+    pmat(2,3) = p_AC_BC_null; pmat(3,2) = p_AC_BC_null;  % AC vs BC
+
+    pmat_straddle = zeros(3);
+    pmat_straddle(1,2) = p_AB_AC; pmat_straddle(2,1) = p_AB_AC;
+    pmat_straddle(1,3) = p_AB_BC; pmat_straddle(3,1) = p_AB_BC;
+    pmat_straddle(2,3) = p_AC_BC; pmat_straddle(3,2) = p_AC_BC;
 
     % ---------- CIs ----------
     ci_AB_AC = prctile(diff_AB_AC, [2.5 97.5]);
@@ -159,12 +196,24 @@ function pvals = pairedBootstrapCompareCorrelations(outsA, outsB, outsC, trialTy
 
     % ---------- package ----------
     pvals = struct();
-    pvals.AB_vs_AC = p_AB_AC;
-    pvals.AB_vs_BC = p_AB_BC;
-    pvals.AC_vs_BC = p_AC_BC;
-    pvals.pmat = pmat;
+    % Default p-values use the recentered-null variant.
+    pvals.AB_vs_AC = p_AB_AC_null;
+    pvals.AB_vs_BC = p_AB_BC_null;
+    pvals.AC_vs_BC = p_AC_BC_null;
+    pvals.pmat     = pmat;
+
+    % Legacy percentile-style p-values (kept for back-compat / comparison).
+    pvals.straddle = struct( ...
+        'AB_vs_AC', p_AB_AC, ...
+        'AB_vs_BC', p_AB_BC, ...
+        'AC_vs_BC', p_AC_BC, ...
+        'pmat',     pmat_straddle);
 
     pvals.observed = struct('r_AB', r_AB_obs, 'r_AC', r_AC_obs, 'r_BC', r_BC_obs);
+    pvals.observed_diffs = struct( ...
+        'AB_minus_AC', d_AB_AC_obs, ...
+        'AB_minus_BC', d_AB_BC_obs, ...
+        'AC_minus_BC', d_AC_BC_obs);
 
     pvals.diffs = struct( ...
         'AB_minus_AC', diff_AB_AC, ...
@@ -188,23 +237,36 @@ function pvals = pairedBootstrapCompareCorrelations(outsA, outsB, outsC, trialTy
             upper(trialType), dimLabel, method, nBoot, minResp);
         fprintf('Observed: r(A,B)=%.3f  r(A,C)=%.3f  r(B,C)=%.3f\n', ...
             r_AB_obs, r_AC_obs, r_BC_obs);
-        fprintf('r(A,B) vs r(A,C):  diff=%.3f  95%%CI=[%.3f, %.3f]  p=%.4f\n', ...
-            mean(diff_AB_AC,'omitnan'), ci_AB_AC(1), ci_AB_AC(2), p_AB_AC);
-        fprintf('r(A,B) vs r(B,C):  diff=%.3f  95%%CI=[%.3f, %.3f]  p=%.4f\n', ...
-            mean(diff_AB_BC,'omitnan'), ci_AB_BC(1), ci_AB_BC(2), p_AB_BC);
-        fprintf('r(A,C) vs r(B,C):  diff=%.3f  95%%CI=[%.3f, %.3f]  p=%.4f\n', ...
-            mean(diff_AC_BC,'omitnan'), ci_AC_BC(1), ci_AC_BC(2), p_AC_BC);
+        fprintf('                                                     p (null)  p (straddle)\n');
+        fprintf('r(A,B) vs r(A,C):  diff=%.3f  95%%CI=[%.3f, %.3f]  %8.4f  %8.4f\n', ...
+            d_AB_AC_obs, ci_AB_AC(1), ci_AB_AC(2), p_AB_AC_null, p_AB_AC);
+        fprintf('r(A,B) vs r(B,C):  diff=%.3f  95%%CI=[%.3f, %.3f]  %8.4f  %8.4f\n', ...
+            d_AB_BC_obs, ci_AB_BC(1), ci_AB_BC(2), p_AB_BC_null, p_AB_BC);
+        fprintf('r(A,C) vs r(B,C):  diff=%.3f  95%%CI=[%.3f, %.3f]  %8.4f  %8.4f\n', ...
+            d_AC_BC_obs, ci_AC_BC(1), ci_AC_BC(2), p_AC_BC_null, p_AC_BC);
     end
 end
 
 % ---- helpers ----
 function p = compute_2sided_p(diffs)
+    % Percentile / "straddle zero" p-value.
     diffs = diffs(~isnan(diffs));
     if isempty(diffs), p = NaN; return; end
     p = 2 * min(mean(diffs > 0), mean(diffs < 0));
     p = min(p, 1);
 end
 
-function out = ternary(cond, a, b)
-    if cond, out = a; else, out = b; end
+function p = compute_recentered_p(diffs, obs)
+    % Recentered-null two-sided p-value. Recenter the bootstrap diff
+    % distribution at 0 to approximate the null, then compute the
+    % probability of obtaining a difference at least as extreme (in
+    % absolute value) as `obs`.
+    diffs = diffs(~isnan(diffs));
+    if isempty(diffs) || isnan(obs), p = NaN; return; end
+    null_dist = diffs - mean(diffs);
+    p = mean(abs(null_dist) >= abs(obs));
+    p = min(max(p, 1/(numel(null_dist)+1)), 1);  % floor at 1/(B+1)
 end
+
+% ternary lives in utils/ternary.m; relied upon via the addpath in
+% run_cross_cultural_analysis.m.

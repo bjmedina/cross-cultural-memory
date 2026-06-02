@@ -216,4 +216,38 @@ FA trials: non-repeat trials (`isnan(repeatPosition)`), scored as `1 - isRespons
 
 ## Python version
 
-`cross_cultural_analysis.py` reimplements the full pipeline using NumPy, SciPy, and Matplotlib. Edit the `BASE_DIR`, site codes, and conditions at the bottom of the file, then run directly.
+The Python twin lives in `python/` and mirrors `stats/` 1:1:
+
+```
+python/
+  _utils.py          # shared helpers: intersect_items, _corr, clamp_unit
+  split_half.py      # estimate_split_half_flexible, split_half_sb,
+                     #   calculate_split_half_reliability
+  intergroup_corr.py # itemwise_corr, bootstrap_intergroup_correlation_sem
+  paired_bootstrap.py# paired_bootstrap_compare_correlations
+                     #   (both recentered-null and straddle-zero p-values)
+  power_simulation.py# power_simulation_paired_bootstrap
+```
+
+Top-level driver (mirrors `run_cross_cultural_analysis.m`):
+
+```bash
+python run_cross_cultural_analysis.py
+```
+
+Programmatic use:
+
+```python
+from python import (
+    calculate_split_half_reliability,
+    bootstrap_intergroup_correlation_sem,
+    paired_bootstrap_compare_correlations,
+    power_simulation_paired_bootstrap,
+)
+```
+
+The legacy single-file scripts `cross_cultural_analysis.py` and
+`cross_cultural_analysis_stim_bootstrap.py` remain for their .mat-loading and
+plotting code, but their bootstrap implementations predate the median /
+recentered-null conventions documented in [`STATS.md`](STATS.md). Prefer the
+`python/` package or the thin driver above for new work.

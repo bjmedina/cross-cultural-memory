@@ -24,3 +24,15 @@ bolivia_2025_sound_recordings-*.zip
 
 # Large zip archives at root
 *.zip
+
+# LaTeX build artifacts (keep .tex and .pdf; drop intermediates)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/

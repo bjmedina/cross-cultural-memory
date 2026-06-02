@@ -1,0 +1,154 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{xurl}
+
+\newcommand{\corr}{\operatorname{corr}}
+\newcommand{\NaN}{\text{NaN}}
+
+\title{Statistical methods for the cross-cultural recognition memory pipeline}
+\author{Bryan Medina}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\noindent
+This note specifies the statistical procedures implemented in \texttt{Analysis-Scripts-v2/}. Each section names the function(s) responsible.
+
+\section{Data structure}
+Each participant $i$ in group $g$ contributes one recognition memory session with mixed first-presentation and repeat trials. For each unique stimulus $j$ encountered we record two binary indicators:
+\begin{itemize}
+\item the \emph{hit} indicator $h_{gij}\in\{0,1\}$, defined on the nonzero-ISI repeat occurrence of stimulus $j$, equal to $\mathrm{isResponseCorrect}$;
+\item the \emph{false-alarm} indicator $f_{gij}\in\{0,1\}$, defined on the first (non-repeat) occurrence of stimulus $j$, equal to $1-\mathrm{isResponseCorrect}$.
+\end{itemize}
+A participant who did not encounter stimulus $j$ contributes $\NaN$ at $h_{gij}$ and $f_{gij}$. The matrices $H_g, F_g\in(\{0,1\}\cup\{\NaN\})^{n_g\times m}$ are built by \texttt{calculateSplitHalfReliability.m}, where $n_g$ is the number of participants in $g$ passing the d$'$-at-ISI=0 inclusion threshold and $m$ is the union of stimuli encountered by any included participant. Subsequent analyses align to the intersection of stimulus sets across the groups being compared.
+
+\section{Within-group split-half reliability}
+Reliability of an item-level rate vector is estimated by random split-half over participants (default; \texttt{splitDim} = 1) or over stimuli (\texttt{splitDim} = 2). For each of $S$ random splits ($S=10{,}000$ by default), participants are partitioned at random into two halves. Item-level means $\bar h^{(1)},\bar h^{(2)}\in\mathbb{R}^m$ are computed within each half and Spearman's rank correlation $r_s$ is computed across items, ignoring items where either half is $\NaN$. Items with fewer than three valid pairs are dropped from that split. The half-set reliability is the \emph{median} of the per-split correlations,
+\begin{equation}
+\hat\rho_{1/2}=\operatorname{median}\{r_s^{(1)},\dots,r_s^{(S)}\}.
+\end{equation}
+The median is used in place of an arithmetic or Fisher-$z$ mean because it is robust to skew and to occasional degenerate splits (e.g., a split where one half's item rates have near-zero variance), and it is invariant to monotone transforms of $r$. The standard deviation of $\{r_s\}$ is reported as a dispersion statistic.
+
+The reliability of the full set follows from the Spearman--Brown correction,
+\begin{equation}
+\hat\rho_{\mathrm{SB}}=\frac{2\hat\rho_{1/2}}{1+\hat\rho_{1/2}},
+\label{eq:sb}
+\end{equation}
+and is the quantity used for attenuation correction (\S\ref{sec:atten}). Implementation: \texttt{estimateSplitHalfFlexible.m}. The FA matrix follows the same procedure.
+
+\section{Intergroup itemwise correlation: point estimate}
+Given two groups $A$ and $B$ aligned on a shared item set $\mathcal{S}_{AB}$, define group-level item means
+\begin{equation}
+\bar h_{Aj}=\frac{1}{|\{i: h_{Aij}\ne\NaN\}|}\sum_{i:\,h_{Aij}\ne\NaN}h_{Aij},
+\end{equation}
+and analogously $\bar h_{Bj}$. Item $j$ is retained if it has at least \texttt{minResp} non-$\NaN$ observations in each group (default \texttt{minResp}\,$=2$); items below this threshold are removed before correlation. At least \texttt{minItems}\,$=5$ retained items are required.
+
+The point estimate is
+\begin{equation}
+\hat r_{AB} = \corr_{\mathrm{Spearman}}\!\bigl(\{\bar h_{Aj}\}_{j\in\mathcal{V}_{AB}},\,\{\bar h_{Bj}\}_{j\in\mathcal{V}_{AB}}\bigr),
+\label{eq:rab}
+\end{equation}
+where $\mathcal{V}_{AB}\subseteq\mathcal{S}_{AB}$ are the items meeting the coverage criterion. Spearman is the default given the bounded, often skewed nature of group-mean hit rates.
+
+\section{Bootstrap confidence intervals}
+\label{sec:boot}
+A cluster bootstrap is used to obtain confidence intervals on $\hat r_{AB}$.
+
+\paragraph{Participant bootstrap (\texttt{BootstrapDim} = 1, default).} On each of $B$ iterations, participants in group $A$ are resampled with replacement to size $n_A$, independently from group $B$. Item-level means $\bar h_A^{(b)},\bar h_B^{(b)}$ are recomputed on the resampled participants, the coverage filter is re-applied, and a per-iteration correlation $r^{(b)}_{AB}$ is recorded.
+
+\paragraph{Stimulus bootstrap (\texttt{BootstrapDim} = 2).} A single set of stimuli is resampled with replacement from $\mathcal{S}_{AB}$ and used for both groups. Repeatedly drawn stimuli appear as repeated entries in the correlation vector --- the standard cluster-bootstrap-by-items quirk.
+
+The headline central value is the sample point estimate $\hat r_{AB}$ (Eq.~\ref{eq:rab}) computed once on the original (un-resampled) data; the bootstrap is used only for uncertainty quantification, not for re-estimating the central value. Across iterations the distribution is summarized by:
+\begin{itemize}
+\item a 95\% percentile CI = $\bigl[\mathrm{P}_{2.5},\,\mathrm{P}_{97.5}\bigr]$ of the $r^{(b)}$ distribution;
+\item the \emph{median} of the bootstrap distribution as a secondary sanity-check value. The bootstrap median should sit close to $\hat r_{AB}$; a large gap signals skew in the resampling distribution and is itself diagnostic.
+\end{itemize}
+No Fisher-$z$ averaging is used. Fisher-$z$ stabilizes variance of correlations but introduces a transform on the central value; reporting the untransformed $\hat r$ alongside a percentile CI avoids this.
+
+\section{Attenuation correction}
+\label{sec:atten}
+Reliability-corrected (``disattenuated'') correlations follow the classical Spearman correction:
+\begin{equation}
+\hat r^{*}_{AB} = \frac{\hat r_{AB}}{\sqrt{\hat\rho_{\mathrm{SB}}^{A}\,\hat\rho_{\mathrm{SB}}^{B}}}.
+\label{eq:atten}
+\end{equation}
+The denominator is floored at machine epsilon and the corrected estimate is clamped to $[-1,1]$. Three modes select which reliability is used inside the bootstrap:
+\begin{description}
+\item[\texttt{`fixed'}] full-sample $\hat\rho_{\mathrm{SB}}^{A,B}$ are used unchanged in every iteration. Fast; conservative.
+\item[\texttt{`subset'}] reliabilities are recomputed once on the items surviving the coverage filter at the point estimate, then held fixed.
+\item[\texttt{`per-draw'}] reliabilities are recomputed on each bootstrap resample, using the same resampled participants/stimuli and the same item subset as that iteration's correlation. The rigorous choice; propagates resample-level uncertainty into the corrected estimate.
+\end{description}
+
+\section{Paired-bootstrap comparison of three intergroup correlations}
+\label{sec:paired}
+The substantive question---whether the US--San Borja correlation differs from US--Tsimane', etc.---requires testing equality of correlations that \emph{share a group}. Independent bootstrap CIs for each correlation are insufficient: $\hat r_{AB}$ and $\hat r_{AC}$ are dependent (both depend on $A$), and ignoring this dependence overstates the variance of their difference.
+
+We use \texttt{pairedBootstrapCompareCorrelations.m}, which preserves dependence by \emph{sharing the bootstrap resample of any group that appears in both correlations being compared}. On iteration $b$:
+\begin{enumerate}
+\item Resample participants within each group independently: indices $\boldsymbol\pi_A^{(b)},\boldsymbol\pi_B^{(b)},\boldsymbol\pi_C^{(b)}$ (participant bootstrap), or draw a single shared item resample $\boldsymbol\pi_{\mathrm{stim}}^{(b)}$ (stimulus bootstrap).
+\item Compute group means from the resampled units, and obtain all three correlations $r^{(b)}_{AB},r^{(b)}_{AC},r^{(b)}_{BC}$ on the items meeting \texttt{minResp} in all three groups. Critically, $\bar h_A^{(b)}$ entering $r^{(b)}_{AB}$ and $\bar h_A^{(b)}$ entering $r^{(b)}_{AC}$ are computed from the \emph{same} $\boldsymbol\pi_A^{(b)}$, and analogously for $B$ and $C$.
+\item Form pairwise differences $d^{(b)}_{AB,AC}=r^{(b)}_{AB}-r^{(b)}_{AC}$, etc.
+\end{enumerate}
+The empirical distributions $\{d^{(b)}\}_{b=1}^{B}$ are the bootstrap distributions of the differences; their $\mathrm{P}_{2.5},\mathrm{P}_{97.5}$ percentiles give 95\% CIs.
+
+We emphasize that ``paired'' here refers to the \emph{shared-group resample}, not matched participants across cultures; participants are not matched across sites.
+
+\section{Two-sided p-values}
+\label{sec:pvals}
+Two p-value definitions are computed and reported.
+
+\paragraph{Recentered-null (default).} Let $\bar d$ denote the bootstrap mean of $d^{(b)}$ and $d^{\mathrm{obs}}$ the observed difference computed from the original sample. The null is constructed by recentering the bootstrap distribution at zero, $\tilde d^{(b)} = d^{(b)} - \bar d$, and
+\begin{equation}
+p_{\mathrm{null}} = \widehat{\Pr}\!\bigl(\,|\tilde d|\ge|d^{\mathrm{obs}}|\,\bigr),
+\label{eq:pnull}
+\end{equation}
+floored at $1/(B+1)$. This is the bootstrap analogue of a permutation test under $H_0:\delta=0$ and is the test we recommend reporting.
+
+\paragraph{Straddle-zero (legacy).}
+\begin{equation}
+p_{\mathrm{strad}} = 2\min\!\bigl(\widehat{\Pr}(d^{(b)}>0),\,\widehat{\Pr}(d^{(b)}<0)\bigr).
+\label{eq:pstraddle}
+\end{equation}
+Asks whether the bootstrap CI of the difference crosses zero. Biased under skew of the bootstrap distribution, particularly at small $n$. Retained for backward comparability with prior pipeline runs.
+
+When (\ref{eq:pnull}) and (\ref{eq:pstraddle}) diverge appreciably, the recentered-null variant is the appropriate one to report; the divergence itself signals skew in the bootstrap of $d$.
+
+\section{Small-sample considerations and validation}
+With per-group $n\in[15,35]$ and shared-item counts $m\in[40,80]$---typical for cross-cultural fieldwork---both the bootstrap CIs and the paired test operate at the lower edge of their valid range. We address this two ways.
+
+\paragraph{Reporting.} Each pipeline run records (i) the per-iteration retained item count after the \texttt{minResp} filter, (ii) within-group $\hat\rho_{\mathrm{SB}}$, and (iii) the gap between (\ref{eq:pnull}) and (\ref{eq:pstraddle}). Any of these falling far outside their typical range signals that the test is operating near its limits and the corresponding p-value should be interpreted with caution.
+
+\paragraph{Calibration via simulation.} The script \texttt{powerSimulationPairedBootstrap.m} generates synthetic three-group recognition memory data with a specified true correlation structure across groups and per-group sample sizes matching the real study. Under $H_0$ (all pairwise true correlations equal), it reports the empirical type-I error rate of each pairwise test; under $H_1$ (one correlation differs by $\Delta$), it reports power. CI coverage for each difference is also reported. Running this once at the actual site sizes provides the operating characteristics that should accompany any reported p-value from the real data.
+
+\section{Software and reproducibility}
+All MATLAB analyses use MATLAB 2018b+. Random splits and bootstrap resamples are drawn with \texttt{rng(`shuffle')} at the top of each routine; for reproducible runs, set \texttt{rng(seed)} once before calling \texttt{run\_cross\_cultural\_analysis.m}.
+
+A Python twin lives in \texttt{python/} and mirrors MATLAB's \texttt{stats/} 1:1: \texttt{split\_half.py}, \texttt{intergroup\_corr.py}, \texttt{paired\_bootstrap.py}, \texttt{power\_simulation.py}, with shared helpers in \texttt{\_utils.py}. The top-level driver is \texttt{run\_cross\_cultural\_analysis.py}. The two languages compute the same statistics (including the recentered-null and straddle-zero p-values of \S\ref{sec:pvals} and the calibration sim of \S8) and produce numerically matching results to within bootstrap sampling error. Python 3.7+, NumPy, SciPy.
+
+\appendix
+\section{Function-to-equation map}
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Function & Equation / Step \\
+\midrule
+\texttt{calculateSplitHalfReliability} & \S1; calls \S2 \\
+\texttt{estimateSplitHalfFlexible}      & $\hat\rho_{1/2}$ in \S2 \\
+Spearman--Brown (inline)                & Eq.~(\ref{eq:sb}) \\
+\texttt{bootstrapIntergroupCorrelationSEM} & Eqs.~(\ref{eq:rab}), (\ref{eq:atten}); \S\ref{sec:boot}, \S\ref{sec:atten} \\
+\texttt{pairedBootstrapCompareCorrelations} & \S\ref{sec:paired}; Eqs.~(\ref{eq:pnull}), (\ref{eq:pstraddle}) \\
+\texttt{plotTripleIntergroupBar\_v2}    & reporting \\
+\texttt{sensitivityMinResp}             & sensitivity to \texttt{minResp} \\
+\texttt{powerSimulationPairedBootstrap} & calibration \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

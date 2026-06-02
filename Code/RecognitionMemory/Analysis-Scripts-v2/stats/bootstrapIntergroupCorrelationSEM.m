@@ -55,7 +55,7 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
     [nA,nItems] = size(A); nB = size(B,1);
 
     % ---- point estimate ----
-    [r_point_raw, valid_items_point] = compute_r_on_items(A,B,corrType,opt.minResp,opt.minItems);
+    [r_point_raw, valid_items_point] = itemwiseCorr(A,B,corrType,opt.minResp,opt.minItems);
     SB_A_point = NaN; SB_B_point = NaN; r_point_corr = NaN;
 
     if opt.CorrectAtten
@@ -63,8 +63,8 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
             case "fixed"
                 SB_A_use = SB_fixed_A; SB_B_use = SB_fixed_B;
             case "subset"
-                SB_A_use = split_half_SB_flexible(A(:,valid_items_point), corrType, opt.SplitHalfRepeats, splitDim);
-                SB_B_use = split_half_SB_flexible(B(:,valid_items_point), corrType, opt.SplitHalfRepeats, splitDim);
+                SB_A_use = splitHalfSB(A(:,valid_items_point), corrType, opt.SplitHalfRepeats, splitDim);
+                SB_B_use = splitHalfSB(B(:,valid_items_point), corrType, opt.SplitHalfRepeats, splitDim);
             otherwise
                 SB_A_use = NaN; SB_B_use = NaN;
         end
@@ -118,8 +118,18 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
                 case "subset"
                     SB_A = SB_A_point; SB_B = SB_B_point;
                 otherwise % 'per-draw'
-                    SB_A = split_half_SB_flexible(A, corrType, ceil(opt.SplitHalfRepeats/2), splitDim);
-                    SB_B = split_half_SB_flexible(B, corrType, ceil(opt.SplitHalfRepeats/2), splitDim);
+                    % Recompute split-half reliability on the SAME resample
+                    % and SAME items used for this draw's correlation.
+                    switch bootDim
+                        case 1
+                            A_draw = A(idxA, valid);
+                            B_draw = B(idxB, valid);
+                        case 2
+                            A_draw = A(:, idxStim(valid));
+                            B_draw = B(:, idxStim(valid));
+                    end
+                    SB_A = splitHalfSB(A_draw, corrType, ceil(opt.SplitHalfRepeats/2), splitDim);
+                    SB_B = splitHalfSB(B_draw, corrType, ceil(opt.SplitHalfRepeats/2), splitDim);
             end
             if ~isnan(SB_A) && ~isnan(SB_B)
                 rBoot_corr(b) = clamp_unit(r / max(sqrt(SB_A*SB_B), eps));
@@ -127,80 +137,53 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
         end
     end
 
-    % ---- summarize (Fisher-z means) ----
+    % ---- summarize ----
+    % Headline central value is the SAMPLE point estimate (point_raw / point_corr)
+    % computed once on the original data; bootstrap is used only for the CI.
+    % Bootstrap median is reported as a secondary sanity-check quantity.
     rBoot_raw  = rBoot_raw(~isnan(rBoot_raw));
     ci_raw     = prctile(rBoot_raw,[2.5 97.5]);
-    mean_raw   = tanh(mean(atanh(limit_r(rBoot_raw))));
+    median_raw = median(rBoot_raw);
     if any(~isnan(rBoot_corr))
-        rBoot_corr = rBoot_corr(~isnan(rBoot_corr));
-        ci_corr    = prctile(rBoot_corr,[2.5 97.5]);
-        mean_corr  = tanh(mean(atanh(limit_r(rBoot_corr))));
+        rBoot_corr  = rBoot_corr(~isnan(rBoot_corr));
+        ci_corr     = prctile(rBoot_corr,[2.5 97.5]);
+        median_corr = median(rBoot_corr);
     else
-        rBoot_corr = []; ci_corr=[NaN NaN]; mean_corr=NaN;
+        rBoot_corr = []; ci_corr=[NaN NaN]; median_corr=NaN;
     end
 
     % ---- pack ----
+    % Headline values: point_raw / point_corr (sample estimates).
+    % Bootstrap percentile CIs: ci_raw / ci_corr.
+    % Bootstrap medians: median_boot_raw / median_boot_corr (secondary).
     outs = struct();
-    outs.point_raw     = r_point_raw;
-    outs.point_corr    = r_point_corr;
-    outs.point_itemsN  = sum(valid_items_point);
-    outs.mean_boot_raw = mean_raw; outs.ci_raw = ci_raw;
-    outs.mean_boot_corr= mean_corr; outs.ci_corr = ci_corr;
-    outs.n_kept_items  = nKept(~isnan(nKept));
-    outs.shared_items  = sharedItems;
-    outs.options       = opt;
-    outs.SB_point_A    = SB_A_point; outs.SB_point_B = SB_B_point;
+    outs.point_raw         = r_point_raw;
+    outs.point_corr        = r_point_corr;
+    outs.point_itemsN      = sum(valid_items_point);
+    outs.ci_raw            = ci_raw;
+    outs.ci_corr           = ci_corr;
+    outs.median_boot_raw   = median_raw;
+    outs.median_boot_corr  = median_corr;
+    outs.n_kept_items      = nKept(~isnan(nKept));
+    outs.shared_items      = sharedItems;
+    outs.options           = opt;
+    outs.SB_point_A        = SB_A_point; outs.SB_point_B = SB_B_point;
 
     if opt.Verbose
-        fprintf('Intergroup %s ? point r=%.3f (N=%d items)\n', upper(trialType), outs.point_raw, outs.point_itemsN);
-        fprintf('Bootstrap RAW (bootDim=%d): mean=%.3f, 95%%CI [%.3f, %.3f]\n', ...
-            bootDim, outs.mean_boot_raw, ci_raw(1), ci_raw(2));
+        fprintf('Intergroup %s | point r=%.3f (N=%d items)\n', upper(trialType), outs.point_raw, outs.point_itemsN);
+        fprintf('Bootstrap RAW (bootDim=%d): 95%%CI [%.3f, %.3f], median=%.3f\n', ...
+            bootDim, ci_raw(1), ci_raw(2), outs.median_boot_raw);
         if ~isnan(outs.point_corr)
-            fprintf('Corrected (mode=%s, splitDim=%d): point=%.3f | boot mean=%.3f, 95%%CI [%.3f, %.3f]\n', ...
-                relMode, splitDim, outs.point_corr, outs.mean_boot_corr, outs.ci_corr(1), outs.ci_corr(2));
+            fprintf('Corrected (mode=%s, splitDim=%d): point=%.3f | 95%%CI [%.3f, %.3f], median=%.3f\n', ...
+                relMode, splitDim, outs.point_corr, outs.ci_corr(1), outs.ci_corr(2), outs.median_boot_corr);
         end
     end
 end
 
 % ---- helpers ----
-function [r, valid] = compute_r_on_items(A,B,corrType,minResp,minItems)
-    nObsA=sum(~isnan(A),1); nObsB=sum(~isnan(B),1);
-    valid=(nObsA>=minResp)&(nObsB>=minResp);
-    if sum(valid)<minItems, r=NaN; return; end
-    r=corr(nanmean(A(:,valid),1)', nanmean(B(:,valid),1)', 'Type',corrType,'Rows','pairwise');
-end
-
-function SB = split_half_SB_flexible(M, corrType, nRep, splitDim)
-    if isempty(M), SB = NaN; return; end
-    [nSub, nItems] = size(M);
-    rr = nan(nRep, 1);
-    for k = 1:nRep
-        switch splitDim
-            case 1  % across participants
-                if nSub < 4, SB = NaN; return; end
-                idx = randperm(nSub);
-                A = nanmean(M(idx(1:floor(nSub/2)), :), 1);
-                B = nanmean(M(idx(floor(nSub/2)+1:end), :), 1);
-            case 2  % across stimuli
-                if nItems < 4, SB = NaN; return; end
-                idx = randperm(nItems);
-                A = nanmean(M(:, idx(1:floor(nItems/2))), 2);
-                B = nanmean(M(:, idx(floor(nItems/2)+1:end)), 2);
-            otherwise
-                error('splitDim must be 1 or 2');
-        end
-
-        A = A(:); B = B(:);
-        valid = ~isnan(A) & ~isnan(B);
-        if sum(valid) < 3, rr(k)=NaN; continue; end
-        % FIX: use corr() with proper Type and NaN handling (was corrcoef)
-        rr(k) = corr(A(valid), B(valid), 'Type', corrType, 'Rows', 'pairwise');
-    end
-    r_half = mean(rr, 'omitnan');
-    SB = (2 * r_half) / (1 + r_half);
-end
+% compute_r_on_items and splitHalfSB live in stats/itemwiseCorr.m and
+% stats/splitHalfSB.m respectively; reused across stats functions.
 function x = clamp_unit(x), x=max(-1,min(1,x)); end
-function x = limit_r(x), x(x>=1)=0.999999; x(x<=-1)=-0.999999; end
 
 % function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varargin)
 % % Participant-bootstrap SEM/CI for intergroup itemwise correlations

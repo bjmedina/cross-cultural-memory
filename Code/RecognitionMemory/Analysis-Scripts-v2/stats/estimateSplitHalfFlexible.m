@@ -1,17 +1,25 @@
-function [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim, corrType)
+function [point_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim, corrType, showPlot)
 % estimateSplitHalfFlexible
 %   Compute split-half reliability across participants or stimuli.
 %
-%   [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim, corrType)
+%   [point_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim, corrType, showPlot)
 %
 %   splitDim = 1 ? split across participants (default)
 %   splitDim = 2 ? split across stimuli
-%   corrType  = 'Spearman' (default) or 'Pearson'
+%   corrType = 'Spearman' (default) or 'Pearson'
+%   showPlot = true (default) to draw a diagnostic histogram for large nSplits;
+%              set false when calling inside loops (e.g., bootstrap).
 %
-%   Bryan Medina ? Bolivia 2025
+%   point_r  = MEDIAN of per-split correlations (robust, transform-invariant)
+%   std_r    = std of per-split correlations (dispersion)
+%   rs       = full vector of per-split correlations
+%
+%   Bryan Medina ? Bolivia 2025; May 2026: median instead of arithmetic mean;
+%                 ShowPlot flag so the function can be reused inside loops.
 
     if nargin < 3, splitDim = 1; end
     if nargin < 4, corrType = 'Spearman'; end
+    if nargin < 5, showPlot = true; end
     nSplits = max(1, nSplits);
     [nSub, nItems] = size(data);
     rs = nan(nSplits, 1);
@@ -57,21 +65,22 @@ function [mean_r, std_r, rs] = estimateSplitHalfFlexible(data, nSplits, splitDim
         end
     end
 
-    % summarize
-    mean_r = mean(rs, 'omitnan');
-    std_r  = std(rs, 'omitnan');
+    % summarize: median of per-split rs (robust; transform-invariant).
+    % Std kept as a dispersion statistic.
+    point_r = median(rs, 'omitnan');
+    std_r   = std(rs, 'omitnan');
 
     % diagnostic histogram
-    if nSplits > 10
+    if showPlot && nSplits > 10
         figure('Color','w');
         histogram(rs, 20, 'FaceColor',[0.2 0.4 0.8], 'EdgeColor','none', 'FaceAlpha',0.75);
         xlabel('Split-half correlation (r)');
         ylabel('Count');
         title(sprintf('Distribution of split-half r (splitDim=%d, nSplits=%d)', splitDim, nSplits));
         grid on; box off;
-        xline(mean_r, 'k-', 'LineWidth',1.5);
-        xline(mean_r+std_r, '--k', 'LineWidth',1);
-        xline(mean_r-std_r, '--k', 'LineWidth',1);
+        xline(point_r, 'k-', 'LineWidth',1.5);
+        xline(point_r+std_r, '--k', 'LineWidth',1);
+        xline(point_r-std_r, '--k', 'LineWidth',1);
     end
 end
 
