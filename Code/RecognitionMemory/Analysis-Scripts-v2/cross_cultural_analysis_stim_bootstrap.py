@@ -1,21 +1,26 @@
 """
-Cross-cultural recognition memory analysis — stimulus bootstrap variant.
+Cross-cultural recognition memory analysis — stimulus bootstrap variant (legacy).
 
-Identical to cross_cultural_analysis.py except the bootstrap resamples
-STIMULI (with replacement) rather than participants.
+NOTE: As of May 2026, the canonical implementation supports both bootstrap
+levels via a single argument. Prefer:
 
-Question answered:
-  "How much does the intergroup correlation depend on which sounds
-   happened to be in our stimulus set?"
+    from python import bootstrap_intergroup_correlation_sem
+    bootstrap_intergroup_correlation_sem(outs_a, outs_b, bootstrap_dim=2)
 
-Error bars are typically narrower than the participant bootstrap (80 items
-is more than ~65 Tsimane' participants), but they reflect a different source
-of variance: stimulus sampling, not participant sampling.
+or the thin top-level driver:
 
-Usage:
-    python cross_cultural_analysis_stim_bootstrap.py
+    python run_cross_cultural_analysis.py
 
-Bryan Medina -- Mar 2026
+The original stimulus-bootstrap question this script answered ("how much does
+the intergroup correlation depend on which sounds happened to be in our
+stimulus set?") is now answered by passing bootstrap_dim=2 to the canonical
+function. Error bars are typically narrower than the participant bootstrap
+but reflect a different source of variance: stimulus sampling, not participant
+sampling.
+
+This script remains as a reference for its .mat loading + plotting code.
+
+Bryan Medina -- Mar 2026; deprecation note added May 2026.
 """
 
 import os
@@ -74,7 +79,7 @@ def intergroup_correlation_stim_boot(matA, matB, items_a, items_b,
     # Point estimate (all stimuli passing min_resp)
     valid_all = (obs_a >= min_resp) & (obs_b >= min_resp)
     if valid_all.sum() < 5:
-        return {'point': np.nan, 'mean_boot': np.nan,
+        return {'point': np.nan, 'median_boot': np.nan,
                 'ci': [np.nan, np.nan], 'sem': np.nan, 'n_items': 0}
 
     mean_a = np.nanmean(A, axis=0)
@@ -104,16 +109,16 @@ def intergroup_correlation_stim_boot(matA, matB, items_a, items_b,
     ci  = np.percentile(r_boot, [2.5, 97.5]) if len(r_boot) > 0 else [np.nan, np.nan]
     sem = np.std(r_boot, ddof=1)             if len(r_boot) > 1 else np.nan
 
-    z = np.arctanh(np.clip(r_boot, -0.999999, 0.999999))
-    mean_boot = np.tanh(np.mean(z)) if len(z) > 0 else np.nan
+    # Headline = sample point r; bootstrap median as secondary sanity check.
+    median_boot = float(np.median(r_boot)) if len(r_boot) > 0 else np.nan
 
     return {
-        'point':     r_point,
-        'mean_boot': mean_boot,
-        'ci':        list(ci),
-        'sem':       sem,
-        'n_items':   int(valid_all.sum()),
-        'r_boot':    r_boot,
+        'point':       r_point,
+        'median_boot': median_boot,
+        'ci':          list(ci),
+        'sem':         sem,
+        'n_items':     int(valid_all.sum()),
+        'r_boot':      r_boot,
     }
 
 

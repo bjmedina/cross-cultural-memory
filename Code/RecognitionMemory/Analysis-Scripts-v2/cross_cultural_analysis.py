@@ -1,18 +1,26 @@
 """
-Cross-cultural recognition memory analysis.
+Cross-cultural recognition memory analysis (legacy participant-bootstrap driver).
 
-Replicates the MATLAB Analysis-Scripts-v2 pipeline in Python:
-  1. Load .mat files, filter by site codes and condition
-  2. Build participant × stimulus matrices of hit rates and FA rates
-  3. Compute within-group split-half reliability (participant split, Spearman)
-  4. Bootstrap intergroup itemwise correlations with attenuation correction
-  5. Paired bootstrap comparison of three group-pair correlations
-  6. Bar chart with 95% CIs and p-value brackets
+NOTE: As of May 2026 the canonical math (split-half reliability, intergroup
+bootstrap, paired-bootstrap with both p-value variants, power simulation)
+lives in the `python/` subpackage. For new work, prefer:
 
-Usage:
-    python cross_cultural_analysis.py
+    python run_cross_cultural_analysis.py     # thin top-level driver
 
-Bryan Medina -- Mar 2026
+or, programmatically:
+
+    from python import (
+        calculate_split_half_reliability,
+        bootstrap_intergroup_correlation_sem,
+        paired_bootstrap_compare_correlations,
+        power_simulation_paired_bootstrap,
+    )
+
+This script remains as the participant-bootstrap reference and for its
+.mat loading + plotting code. The bootstrap implementations here predate
+the median / recentered-null conventions documented in STATS.md.
+
+Bryan Medina -- Mar 2026; deprecation note added May 2026.
 """
 
 import os
@@ -253,7 +261,7 @@ def intergroup_correlation_bootstrap(matA, matB, items_a, items_b,
     valid = (obs_a >= min_resp) & (obs_b >= min_resp)
 
     if valid.sum() < 5:
-        return {'point': np.nan, 'mean_boot': np.nan,
+        return {'point': np.nan, 'median_boot': np.nan,
                 'ci': [np.nan, np.nan], 'n_items': 0}
 
     r_point, _ = spearmanr(mean_a[valid], mean_b[valid])
@@ -279,19 +287,17 @@ def intergroup_correlation_bootstrap(matA, matB, items_a, items_b,
     r_boot = r_boot[np.isfinite(r_boot)]
     ci = np.percentile(r_boot, [2.5, 97.5]) if len(r_boot) > 0 else [np.nan, np.nan]
 
-    # Fisher-z mean
-    z = np.arctanh(np.clip(r_boot, -0.999999, 0.999999))
-    mean_boot = np.tanh(np.mean(z)) if len(z) > 0 else np.nan
-
+    # Headline = sample point r; bootstrap median as secondary sanity check.
+    median_boot = float(np.median(r_boot)) if len(r_boot) > 0 else np.nan
     sem = np.std(r_boot, ddof=1) if len(r_boot) > 1 else np.nan
 
     return {
-        'point': r_point,
-        'mean_boot': mean_boot,
-        'ci': list(ci),
-        'sem': sem,
-        'n_items': int(valid.sum()),
-        'r_boot': r_boot,
+        'point':       r_point,
+        'median_boot': median_boot,
+        'ci':          list(ci),
+        'sem':         sem,
+        'n_items':     int(valid.sum()),
+        'r_boot':      r_boot,
     }
 
 

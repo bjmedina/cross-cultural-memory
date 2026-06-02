@@ -196,7 +196,4 @@ function outs = simulateIntergroupItemwiseCorrelation(outsA, outsB, trialType, v
              level, r_raw, mean_sim, sem_raw, r_corr, mean_corr, sem_corr, ci_raw(1), ci_raw(2));
 end
 
-% -----------------------------
-function out=ternary(cond,a,b)
-    if cond,out=a;else,out=b;end
-end
+% ternary lives in utils/ternary.m.
