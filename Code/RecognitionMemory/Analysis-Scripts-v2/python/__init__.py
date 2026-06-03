@@ -8,6 +8,7 @@ See ../STATS.md for the methods specification.
 """
 
 from . import _utils
+from . import ci_methods
 from . import split_half
 from . import intergroup_corr
 from . import paired_bootstrap
@@ -19,9 +20,11 @@ from .split_half import (
     split_half_sb,
     calculate_split_half_reliability,
 )
+from .ci_methods import ci_percentile, ci_fisher_z, ci_bca, all_cis
 from .intergroup_corr import (
     itemwise_corr,
     bootstrap_intergroup_correlation_sem,
+    jackknife_intergroup_corr,
 )
 from .paired_bootstrap import paired_bootstrap_compare_correlations
 from .power_simulation import power_simulation_paired_bootstrap
@@ -31,8 +34,13 @@ __all__ = [
     "estimate_split_half_flexible",
     "split_half_sb",
     "calculate_split_half_reliability",
+    "ci_percentile",
+    "ci_fisher_z",
+    "ci_bca",
+    "all_cis",
     "itemwise_corr",
     "bootstrap_intergroup_correlation_sem",
+    "jackknife_intergroup_corr",
     "paired_bootstrap_compare_correlations",
     "power_simulation_paired_bootstrap",
     "list_matfiles",

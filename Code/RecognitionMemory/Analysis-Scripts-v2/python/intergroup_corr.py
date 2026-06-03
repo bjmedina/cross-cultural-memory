@@ -16,12 +16,18 @@ from typing import Optional
 import numpy as np
 
 from ._utils import _corr, as_rng, clamp_unit, intersect_items
+from .ci_methods import all_cis
 from .split_half import SplitHalfReliability, split_half_sb
 
 
 @dataclass
 class BootstrapResult:
-    """Outputs of bootstrap_intergroup_correlation_sem, mirroring MATLAB outs."""
+    """Outputs of bootstrap_intergroup_correlation_sem, mirroring MATLAB outs.
+
+    `ci_raw` and `ci_corr` are the percentile CIs (back-compat default).
+    `cis_raw` and `cis_corr` hold all three CI methods (percentile, Fisher-z,
+    BCa) as dicts; see python/ci_methods.py.
+    """
 
     point_raw: float
     point_corr: float
@@ -30,6 +36,10 @@ class BootstrapResult:
     ci_corr: tuple
     median_boot_raw: float
     median_boot_corr: float
+    cis_raw: dict
+    cis_corr: dict
+    jackknife_raw: np.ndarray
+    jackknife_corr: np.ndarray
     n_kept_items: np.ndarray
     shared_items: np.ndarray
     sb_point_a: float
@@ -37,6 +47,67 @@ class BootstrapResult:
     options: dict
     r_boot_raw: np.ndarray
     r_boot_corr: np.ndarray
+
+
+def jackknife_intergroup_corr(
+    A: np.ndarray,
+    B: np.ndarray,
+    *,
+    dim: int = 1,
+    corr_type: str = "Spearman",
+    min_resp: int = 2,
+    min_items: int = 5,
+    sb_a: Optional[float] = None,
+    sb_b: Optional[float] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Leave-one-out intergroup correlations at the same level as the bootstrap.
+
+    Parameters
+    ----------
+    A, B : group matrices [n_g x n_items] aligned on shared items.
+    dim : 1 = jackknife participants (drop one from A, then one from B,
+          concatenate); 2 = jackknife stimuli (drop one column at a time).
+    sb_a, sb_b : if provided, also return jackknife values for the
+                 attenuation-corrected r (r / sqrt(SB_A * SB_B)). If either is
+                 None or non-finite, the corrected jackknife is filled with NaN.
+
+    Returns
+    -------
+    (jk_raw, jk_corr) : 1-D ndarrays of leave-one-out correlations. Length is
+        n_A + n_B for dim=1 (participants pooled across groups), or n_items
+        for dim=2.
+
+    Used by ci_bca for its acceleration term.
+    """
+    if dim == 1:
+        n_a = A.shape[0]
+        n_b = B.shape[0]
+        jk_raw = np.full(n_a + n_b, np.nan)
+        for i in range(n_a):
+            keep = np.ones(n_a, dtype=bool); keep[i] = False
+            r, _ = itemwise_corr(A[keep], B, corr_type=corr_type, min_resp=min_resp, min_items=min_items)
+            jk_raw[i] = r
+        for j in range(n_b):
+            keep = np.ones(n_b, dtype=bool); keep[j] = False
+            r, _ = itemwise_corr(A, B[keep], corr_type=corr_type, min_resp=min_resp, min_items=min_items)
+            jk_raw[n_a + j] = r
+    elif dim == 2:
+        n_items = A.shape[1]
+        jk_raw = np.full(n_items, np.nan)
+        for j in range(n_items):
+            keep = np.ones(n_items, dtype=bool); keep[j] = False
+            r, _ = itemwise_corr(A[:, keep], B[:, keep], corr_type=corr_type, min_resp=min_resp, min_items=min_items)
+            jk_raw[j] = r
+    else:
+        raise ValueError("dim must be 1 (participants) or 2 (stimuli).")
+
+    if sb_a is not None and sb_b is not None and np.isfinite(sb_a) and np.isfinite(sb_b):
+        denom = max(np.sqrt(max(sb_a * sb_b, 0)), np.finfo(float).eps)
+        jk_corr = np.clip(jk_raw / denom, -1.0, 1.0)
+    else:
+        jk_corr = np.full_like(jk_raw, np.nan)
+
+    return jk_raw, jk_corr
 
 
 def itemwise_corr(
@@ -191,17 +262,36 @@ def bootstrap_intergroup_correlation_sem(
                 denom = max(np.sqrt(max(sb_a * sb_b, 0)), np.finfo(float).eps)
                 r_boot_corr[b] = clamp_unit(r / denom)
 
-    # ---- summarize ----
+    # ---- jackknife (for BCa acceleration) ----
+    jk_raw, jk_corr = jackknife_intergroup_corr(
+        A, B, dim=bootstrap_dim, corr_type=corr_type,
+        min_resp=min_resp, min_items=min_items,
+        sb_a=sb_a_point if correct_atten else None,
+        sb_b=sb_b_point if correct_atten else None,
+    )
+
+    # ---- summarize: percentile / Fisher-z / BCa ----
     r_boot_raw_clean = r_boot_raw[np.isfinite(r_boot_raw)]
-    ci_raw = tuple(np.percentile(r_boot_raw_clean, [2.5, 97.5])) if r_boot_raw_clean.size else (float("nan"),) * 2
+    cis_raw = all_cis(r_point_raw, r_boot_raw_clean, jk_raw, alpha=0.05) if r_boot_raw_clean.size else {
+        "percentile": (float("nan"), float("nan")),
+        "fisher_z":   (float("nan"), float("nan")),
+        "bca":        (float("nan"), float("nan")),
+    }
+    ci_raw = cis_raw["percentile"]  # back-compat default
     median_raw = float(np.median(r_boot_raw_clean)) if r_boot_raw_clean.size else float("nan")
 
     r_boot_corr_clean = r_boot_corr[np.isfinite(r_boot_corr)]
     if r_boot_corr_clean.size:
-        ci_corr = tuple(np.percentile(r_boot_corr_clean, [2.5, 97.5]))
+        cis_corr = all_cis(r_point_corr, r_boot_corr_clean, jk_corr, alpha=0.05)
+        ci_corr = cis_corr["percentile"]
         median_corr = float(np.median(r_boot_corr_clean))
     else:
-        ci_corr = (float("nan"), float("nan"))
+        cis_corr = {
+            "percentile": (float("nan"), float("nan")),
+            "fisher_z":   (float("nan"), float("nan")),
+            "bca":        (float("nan"), float("nan")),
+        }
+        ci_corr = cis_corr["percentile"]
         median_corr = float("nan")
 
     if verbose:
@@ -209,16 +299,18 @@ def bootstrap_intergroup_correlation_sem(
             f"Intergroup {trial_type.upper()} | point r={r_point_raw:.3f} "
             f"(N={int(valid_items_point.sum())} items)"
         )
-        print(
-            f"Bootstrap RAW (bootDim={bootstrap_dim}): "
-            f"95% CI [{ci_raw[0]:.3f}, {ci_raw[1]:.3f}], median={median_raw:.3f}"
-        )
+        print(f"Bootstrap RAW (bootDim={bootstrap_dim}), median={median_raw:.3f}")
+        print(f"  95% percentile : [{cis_raw['percentile'][0]:+.3f}, {cis_raw['percentile'][1]:+.3f}]")
+        print(f"  95% Fisher-z   : [{cis_raw['fisher_z'][0]:+.3f}, {cis_raw['fisher_z'][1]:+.3f}]")
+        print(f"  95% BCa        : [{cis_raw['bca'][0]:+.3f}, {cis_raw['bca'][1]:+.3f}]")
         if np.isfinite(r_point_corr):
             print(
                 f"Corrected (mode={reliability_mode}, splitDim={reliability_split_dim}): "
-                f"point={r_point_corr:.3f} | 95% CI [{ci_corr[0]:.3f}, {ci_corr[1]:.3f}], "
-                f"median={median_corr:.3f}"
+                f"point={r_point_corr:.3f}, median={median_corr:.3f}"
             )
+            print(f"  95% percentile : [{cis_corr['percentile'][0]:+.3f}, {cis_corr['percentile'][1]:+.3f}]")
+            print(f"  95% Fisher-z   : [{cis_corr['fisher_z'][0]:+.3f}, {cis_corr['fisher_z'][1]:+.3f}]")
+            print(f"  95% BCa        : [{cis_corr['bca'][0]:+.3f}, {cis_corr['bca'][1]:+.3f}]")
 
     return BootstrapResult(
         point_raw=r_point_raw,
@@ -228,6 +320,10 @@ def bootstrap_intergroup_correlation_sem(
         ci_corr=ci_corr,
         median_boot_raw=median_raw,
         median_boot_corr=median_corr,
+        cis_raw=cis_raw,
+        cis_corr=cis_corr,
+        jackknife_raw=jk_raw,
+        jackknife_corr=jk_corr,
         n_kept_items=n_kept[np.isfinite(n_kept)],
         shared_items=shared,
         sb_point_a=sb_a_point,

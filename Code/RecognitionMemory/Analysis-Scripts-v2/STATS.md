@@ -43,18 +43,75 @@ where $\mathcal{V}_{AB} \subseteq \mathcal{S}_{AB}$ is the set of items meeting 
 
 ## 4. Bootstrap confidence intervals
 
-A cluster bootstrap is used to obtain confidence intervals on the intergroup correlation. Two resampling units are supported.
+A cluster bootstrap generates $B$ resampled correlations $\{r^{(b)}_{AB}\}_{b=1}^B$ around the sample point estimate $\hat r_{AB}$. The headline value is always $\hat r_{AB}$ from §3, computed once on the original (un-resampled) data; the bootstrap is used only for uncertainty quantification. The bootstrap **median** is reported as a secondary sanity-check — it should sit close to $\hat r_{AB}$, and a large gap signals skew in the resampling distribution.
 
-**Participant bootstrap (`BootstrapDim = 1`, default).** On each of $B$ iterations ($B = 1000$–$5000$), participants in group $A$ are resampled with replacement to size $n_A$, independently from group $B$. Item-level means $\bar h_A^{(b)}, \bar h_B^{(b)}$ are recomputed on the resampled participants, the coverage filter is re-applied, and a per-iteration correlation $r^{(b)}_{AB}$ is recorded.
+Three CI methods are computed from the same bootstrap distribution. They differ in how they cope with the small-$n$ skew that is common for correlation statistics, and we report all three by default so divergences between them are visible.
 
-**Stimulus bootstrap (`BootstrapDim = 2`).** A single set of stimuli is resampled with replacement from the shared set $\mathcal{S}_{AB}$ and used for both groups. Group means are computed on this stimulus resample. Note that, by construction, repeatedly drawn stimuli appear as repeated values in the correlation vector and inflate the apparent $n$; this is the standard cluster-bootstrap-by-items quirk and is the appropriate procedure when stimuli are treated as the random factor.
+### 4.1 Resampling units
 
-The headline central value is the sample point estimate $\hat r_{AB}$ from §3, computed once on the original (un-resampled) data. The bootstrap is used only for uncertainty quantification, not for re-estimating the central value. Across bootstrap iterations the distribution is summarized by:
+**Participant bootstrap (`BootstrapDim = 1`, default).** On each of $B$ iterations ($B = 1000$–$5000$), participants in group $A$ are resampled with replacement to size $n_A$, independently from group $B$. Item-level means $\bar h_A^{(b)}, \bar h_B^{(b)}$ are recomputed on the resampled participants, the coverage filter is re-applied, and a per-iteration correlation $r^{(b)}_{AB}$ is recorded. Captures uncertainty in "which participants we happened to recruit."
 
-- a **95% percentile CI** = $[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}]$ of the $r^{(b)}$ distribution;
-- the **median** of the bootstrap distribution as a secondary sanity-check value. The bootstrap median should sit close to $\hat r_{AB}$; a large gap signals skew in the resampling distribution and is itself diagnostic.
+**Stimulus bootstrap (`BootstrapDim = 2`).** A single set of stimuli is resampled with replacement from the shared set $\mathcal{S}_{AB}$ and used for both groups. Group means are computed on this stimulus resample. Repeatedly drawn stimuli appear as repeated values in the correlation vector and inflate the apparent $n$ — the standard cluster-bootstrap-by-items quirk. Captures uncertainty in "which sounds we happened to use."
 
-No Fisher-$z$ averaging is used. Fisher-$z$ stabilizes variance of correlations but introduces a transform on the central value; reporting the untransformed sample $\hat r$ alongside a percentile CI avoids this and is the more transparent choice.
+Reporting both side by side tells you which source of variance dominates; the two should usually be of similar magnitude. A large gap (participant bars wide, stimulus bars tight, or vice versa) localizes where the uncertainty is coming from and is itself a substantive finding.
+
+### 4.2 Percentile CI (default)
+
+The simplest summary of the bootstrap distribution:
+
+$$\text{CI}^{\text{pct}}_{1-\alpha} = \bigl[\mathrm{P}_{\alpha/2}(\{r^{(b)}\}),\; \mathrm{P}_{1-\alpha/2}(\{r^{(b)}\})\bigr].$$
+
+For $\alpha = 0.05$ this is the $[2.5\%, 97.5\%]$ quantile interval. The percentile CI is exact when the bootstrap distribution is unbiased and symmetric on the chosen scale. At small $n$ and for correlations near the boundaries, neither assumption holds — the sampling distribution of $r$ is skewed and the bootstrap inherits that skew, so the percentile CI can be biased (typically too narrow on the side closer to $\pm 1$).
+
+### 4.3 Fisher-$z$ back-transformed CI
+
+Fisher's $z$-transform $z = \mathrm{atanh}(r) = \tfrac{1}{2}\ln\!\bigl(\tfrac{1+r}{1-r}\bigr)$ maps $r \in (-1, 1)$ to $z \in \mathbb{R}$ in a way that makes the sampling distribution of $z$ approximately normal with variance independent of the true $\rho$. We build a normal-approximation CI on the $z$ scale, then transform the endpoints back:
+
+$$\hat z = \mathrm{atanh}(\hat r_{AB}), \qquad \hat\sigma_z = \mathrm{SD}\!\bigl(\{\mathrm{atanh}(r^{(b)})\}\bigr),$$
+
+$$\text{CI}^{\text{Fz}}_{1-\alpha} = \bigl[\tanh(\hat z - z_{1-\alpha/2}\,\hat\sigma_z),\; \tanh(\hat z + z_{1-\alpha/2}\,\hat\sigma_z)\bigr],$$
+
+where $z_{1-\alpha/2} = 1.96$ for $\alpha = 0.05$. The interval is symmetric in $z$ but asymmetric in $r$, with more room on the side away from $\pm 1$.
+
+Two notes. First, this is **not** the same as "Fisher-$z$ averaging" of the point estimate, which we explicitly reject (§4 preamble). The point estimate is still the untransformed sample $\hat r$; only the SE used to build the CI lives in $z$-space. Second, taking percentiles in $z$-space and back-transforming would give the same endpoints as the raw percentile CI (because $\tanh$ is monotonic), so the meaningful Fisher-$z$ CI must use a parameter like the bootstrap $z$-space SD as we do here.
+
+### 4.4 BCa (bias-corrected and accelerated) CI
+
+When the bootstrap distribution is both biased and skewed — the small-$n$ rule rather than the exception for correlations — Efron's BCa CI adjusts the percentile quantiles to compensate. Two corrections are estimated from the data:
+
+**Bias correction $\hat z_0$.** A measure of how often the bootstrap correlation falls below the sample estimate:
+
+$$\hat z_0 = \Phi^{-1}\!\Bigl(\widehat{\Pr}\bigl(r^{(b)} < \hat r_{AB}\bigr)\Bigr),$$
+
+where $\Phi^{-1}$ is the inverse standard-normal CDF. If the bootstrap distribution is unbiased, exactly half the draws fall below $\hat r$ and $\hat z_0 = 0$.
+
+**Acceleration $\hat a$.** A measure of how the standard error of $r$ changes with $r$, estimated from jackknife pseudo-values. Let $r_{(-i)}$ denote the correlation computed with the $i$-th resampling unit removed (jackknife at the same level as the bootstrap — participants for participant bootstrap, stimuli for stimulus bootstrap), and let $\bar r_{(\cdot)}$ be the mean of those $n$ leave-one-out correlations. Then
+
+$$\hat a = \frac{\sum_i (\bar r_{(\cdot)} - r_{(-i)})^3}{6\bigl(\sum_i (\bar r_{(\cdot)} - r_{(-i)})^2\bigr)^{3/2}}.$$
+
+If the SE of $r$ is constant in $r$, $\hat a = 0$ and BCa reduces to a bias-corrected interval; if the SE varies strongly with $r$ (typical for correlations near $\pm 1$), $\hat a \neq 0$ further widens or shifts the interval.
+
+**Adjusted quantiles.** With $z_{\alpha/2}$ and $z_{1-\alpha/2}$ the standard-normal quantiles,
+
+$$\alpha_1 = \Phi\!\left(\hat z_0 + \frac{\hat z_0 + z_{\alpha/2}}{1 - \hat a(\hat z_0 + z_{\alpha/2})}\right), \qquad \alpha_2 = \Phi\!\left(\hat z_0 + \frac{\hat z_0 + z_{1-\alpha/2}}{1 - \hat a(\hat z_0 + z_{1-\alpha/2})}\right),$$
+
+and
+
+$$\text{CI}^{\text{BCa}}_{1-\alpha} = \bigl[\mathrm{P}_{\alpha_1}(\{r^{(b)}\}),\; \mathrm{P}_{\alpha_2}(\{r^{(b)}\})\bigr].$$
+
+When $\hat z_0 = \hat a = 0$ this is the percentile CI; otherwise the quantiles shift to correct for bias and skew. BCa is the recommended CI in most modern bootstrap references and is the one to report when the percentile and Fisher-$z$ CIs disagree.
+
+### 4.5 What to report and what each method tells you
+
+| Method | Strengths | When it fails |
+|---|---|---|
+| Percentile (§4.2) | Simple, makes no parametric assumption | Biased when bootstrap is skewed (common at small $n$) |
+| Fisher-$z$ (§4.3) | Symmetric on a variance-stabilized scale; handles $r$ near $\pm 1$ | Assumes the $z$-space bootstrap is approximately normal |
+| BCa (§4.4) | Corrects for both bias and skewness; second-order accurate | Acceleration is sensitive to outlying jackknife values |
+
+In practice we recommend reporting **BCa** as the primary CI, with the percentile and Fisher-$z$ CIs available as diagnostics. If all three agree, the percentile CI is fine to report alone (less explanation in the methods). If BCa diverges substantially from the percentile CI, the bootstrap is operating in its bias/skew regime and the divergence itself should be flagged.
+
+We considered but did not implement a **jackknife pseudo-value CI** (compute $r_{(-i)}$ for each unit, form pseudo-values $n\hat r - (n-1)r_{(-i)}$, and use their SE), because BCa already uses the jackknife in its acceleration term and a separate jackknife CI provides little additional information at the small Ns we work with.
 
 ## 5. Attenuation correction
 
