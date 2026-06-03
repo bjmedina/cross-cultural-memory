@@ -137,24 +137,47 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
         end
     end
 
-    % ---- summarize ----
-    % Headline central value is the SAMPLE point estimate (point_raw / point_corr)
-    % computed once on the original data; bootstrap is used only for the CI.
-    % Bootstrap median is reported as a secondary sanity-check quantity.
+    % ---- jackknife (for BCa acceleration) ----
+    if opt.CorrectAtten
+        [jk_raw, jk_corr] = jackknifeIntergroupCorr(A, B, ...
+            'Dim', bootDim, 'CorrType', corrType, ...
+            'MinResp', opt.minResp, 'MinItems', opt.minItems, ...
+            'SB_A', SB_A_point, 'SB_B', SB_B_point);
+    else
+        [jk_raw, jk_corr] = jackknifeIntergroupCorr(A, B, ...
+            'Dim', bootDim, 'CorrType', corrType, ...
+            'MinResp', opt.minResp, 'MinItems', opt.minItems);
+    end
+
+    % ---- summarize: percentile / Fisher-z / BCa CIs ----
+    % Headline central value is the SAMPLE point estimate (point_raw /
+    % point_corr) computed once on the original data; bootstrap is used only
+    % for CIs. Bootstrap median is a secondary sanity-check.
     rBoot_raw  = rBoot_raw(~isnan(rBoot_raw));
-    ci_raw     = prctile(rBoot_raw,[2.5 97.5]);
+    ci_raw_pct = prctile(rBoot_raw,[2.5 97.5]);
+    [ci_raw_fz_lo, ci_raw_fz_hi] = ciFisherZ(r_point_raw, rBoot_raw, 0.05);
+    [ci_raw_bca_lo, ci_raw_bca_hi] = ciBCa(r_point_raw, rBoot_raw, jk_raw, 0.05);
+    ci_raw     = ci_raw_pct;  % back-compat: ci_raw stays percentile
     median_raw = median(rBoot_raw);
+
     if any(~isnan(rBoot_corr))
         rBoot_corr  = rBoot_corr(~isnan(rBoot_corr));
-        ci_corr     = prctile(rBoot_corr,[2.5 97.5]);
+        ci_corr_pct = prctile(rBoot_corr,[2.5 97.5]);
+        [ci_corr_fz_lo, ci_corr_fz_hi] = ciFisherZ(r_point_corr, rBoot_corr, 0.05);
+        [ci_corr_bca_lo, ci_corr_bca_hi] = ciBCa(r_point_corr, rBoot_corr, jk_corr, 0.05);
+        ci_corr     = ci_corr_pct;
         median_corr = median(rBoot_corr);
     else
         rBoot_corr = []; ci_corr=[NaN NaN]; median_corr=NaN;
+        ci_corr_pct = [NaN NaN];
+        ci_corr_fz_lo = NaN; ci_corr_fz_hi = NaN;
+        ci_corr_bca_lo = NaN; ci_corr_bca_hi = NaN;
     end
 
     % ---- pack ----
     % Headline values: point_raw / point_corr (sample estimates).
-    % Bootstrap percentile CIs: ci_raw / ci_corr.
+    % Default CIs (ci_raw / ci_corr) are PERCENTILE for back-compat.
+    % All three CI methods are also returned as cis_raw / cis_corr structs.
     % Bootstrap medians: median_boot_raw / median_boot_corr (secondary).
     outs = struct();
     outs.point_raw         = r_point_raw;
@@ -162,6 +185,16 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
     outs.point_itemsN      = sum(valid_items_point);
     outs.ci_raw            = ci_raw;
     outs.ci_corr           = ci_corr;
+    outs.cis_raw           = struct( ...
+        'percentile', ci_raw_pct, ...
+        'fisher_z',   [ci_raw_fz_lo  ci_raw_fz_hi], ...
+        'bca',        [ci_raw_bca_lo ci_raw_bca_hi]);
+    outs.cis_corr          = struct( ...
+        'percentile', ci_corr_pct, ...
+        'fisher_z',   [ci_corr_fz_lo  ci_corr_fz_hi], ...
+        'bca',        [ci_corr_bca_lo ci_corr_bca_hi]);
+    outs.jackknife_raw     = jk_raw;
+    outs.jackknife_corr    = jk_corr;
     outs.median_boot_raw   = median_raw;
     outs.median_boot_corr  = median_corr;
     outs.n_kept_items      = nKept(~isnan(nKept));
@@ -171,11 +204,16 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
 
     if opt.Verbose
         fprintf('Intergroup %s | point r=%.3f (N=%d items)\n', upper(trialType), outs.point_raw, outs.point_itemsN);
-        fprintf('Bootstrap RAW (bootDim=%d): 95%%CI [%.3f, %.3f], median=%.3f\n', ...
-            bootDim, ci_raw(1), ci_raw(2), outs.median_boot_raw);
+        fprintf('Bootstrap RAW (bootDim=%d), median=%.3f\n', bootDim, outs.median_boot_raw);
+        fprintf('  95%% percentile: [%+.3f, %+.3f]\n', ci_raw_pct(1), ci_raw_pct(2));
+        fprintf('  95%% Fisher-z  : [%+.3f, %+.3f]\n', ci_raw_fz_lo,  ci_raw_fz_hi);
+        fprintf('  95%% BCa       : [%+.3f, %+.3f]\n', ci_raw_bca_lo, ci_raw_bca_hi);
         if ~isnan(outs.point_corr)
-            fprintf('Corrected (mode=%s, splitDim=%d): point=%.3f | 95%%CI [%.3f, %.3f], median=%.3f\n', ...
-                relMode, splitDim, outs.point_corr, outs.ci_corr(1), outs.ci_corr(2), outs.median_boot_corr);
+            fprintf('Corrected (mode=%s, splitDim=%d): point=%.3f, median=%.3f\n', ...
+                relMode, splitDim, outs.point_corr, outs.median_boot_corr);
+            fprintf('  95%% percentile: [%+.3f, %+.3f]\n', ci_corr_pct(1), ci_corr_pct(2));
+            fprintf('  95%% Fisher-z  : [%+.3f, %+.3f]\n', ci_corr_fz_lo,  ci_corr_fz_hi);
+            fprintf('  95%% BCa       : [%+.3f, %+.3f]\n', ci_corr_bca_lo, ci_corr_bca_hi);
         end
     end
 end
