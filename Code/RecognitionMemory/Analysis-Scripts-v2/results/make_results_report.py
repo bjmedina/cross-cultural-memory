@@ -159,19 +159,31 @@ def run_one_condition(cond, force_rebuild=False):
 
     for trial in TRIAL_TYPES:
         print(f"\n--- Trial type: {trial} ---")
-        trial_out = {"pairs": {}}
+        trial_out = {"pairs": {}, "pairs_stim": {}}
 
-        # Pairwise intergroup bootstraps (participant dim by default)
+        # Pairwise intergroup bootstraps (participant dim, BootstrapDim=1)
         for a, b in PAIR_ORDER:
-            print(f"  r({a}, {b}) ...")
+            print(f"  r({a}, {b}) participant ...")
             res = bootstrap_intergroup_correlation_sem(
                 groups[a], groups[b], trial_type=trial,
                 n_boot=N_BOOT, min_resp=MIN_RESP, bootstrap_dim=1,
                 reliability_mode="fixed", correct_atten=True,
-                rng=np.random.default_rng(SEED + _stable_hash(f"{cond}|{trial}|{a}|{b}") % 1_000_000),
+                rng=np.random.default_rng(SEED + _stable_hash(f"{cond}|{trial}|{a}|{b}|p") % 1_000_000),
                 verbose=False,
             )
             trial_out["pairs"][(a, b)] = res
+
+        # Same pairs, stimulus dim (BootstrapDim=2)
+        for a, b in PAIR_ORDER:
+            print(f"  r({a}, {b}) stimulus ...")
+            res2 = bootstrap_intergroup_correlation_sem(
+                groups[a], groups[b], trial_type=trial,
+                n_boot=N_BOOT, min_resp=MIN_RESP, bootstrap_dim=2,
+                reliability_mode="fixed", correct_atten=True,
+                rng=np.random.default_rng(SEED + _stable_hash(f"{cond}|{trial}|{a}|{b}|s") % 1_000_000),
+                verbose=False,
+            )
+            trial_out["pairs_stim"][(a, b)] = res2
 
         # Paired-bootstrap comparison
         print(f"  paired bootstrap ...")
@@ -403,6 +415,25 @@ def emit_intergroup_table(f, cond, trial, trial_results):
     f.write(r"\end{tabular}" + "\n")
     f.write(r"\end{center}" + "\n\n")
 
+    # Stimulus-bootstrap diagnostic
+    pairs_stim = trial_results.get("pairs_stim", {})
+    if pairs_stim:
+        f.write(r"\subsection*{Stimulus-bootstrap diagnostic --- CIs on corrected $\hat r^*$ (resampling stimuli, not participants)}" + "\n")
+        f.write(r"\begin{center}" + "\n")
+        f.write(r"\begin{tabular}{lcccc}" + "\n")
+        f.write(r"\toprule" + "\n")
+        f.write(r"Pair & $\hat r^*$ & Percentile 95\% CI & Fisher-$z$ 95\% CI & BCa 95\% CI \\" + "\n")
+        f.write(r"\midrule" + "\n")
+        for pair in PAIR_ORDER:
+            rs = pairs_stim[pair]
+            f.write(f"{PAIR_LABEL[pair]} & {fmt_r(rs.point_corr)} & "
+                    f"{fmt_ci(*rs.cis_corr['percentile'])} & "
+                    f"{fmt_ci(*rs.cis_corr['fisher_z'])} & "
+                    f"{fmt_ci(*rs.cis_corr['bca'])} \\\\\n")
+        f.write(r"\bottomrule" + "\n")
+        f.write(r"\end{tabular}" + "\n")
+        f.write(r"\end{center}" + "\n\n")
+
     # Paired test table
     f.write(r"\subsection*{Paired-bootstrap comparison}" + "\n")
     f.write(r"\begin{center}" + "\n")
@@ -443,6 +474,82 @@ def emit_section(f, cond, out):
     f.write(r"\clearpage" + "\n\n")
 
 
+def run_scipy_crosscheck(seed=42):
+    """Vanilla two-group BCa cross-check against scipy.stats.bootstrap.
+
+    Generates a synthetic pair (X, Y) of length-N item-level group means
+    drawn from a bivariate normal with known correlation; computes Spearman
+    BCa CIs both with our ci_bca (after our jackknife) and with
+    scipy.stats.bootstrap(method='BCa'). Returns a list of dicts ready for
+    LaTeX tabulation.
+    """
+    from scipy import stats as sst
+    from python.ci_methods import ci_bca
+    rng = np.random.default_rng(seed)
+    rows = []
+    for rho_true, n_items in [(0.3, 80), (0.6, 80), (0.8, 50)]:
+        cov = np.array([[1.0, rho_true], [rho_true, 1.0]])
+        XY = rng.multivariate_normal([0, 0], cov, size=n_items)
+        X, Y = XY[:, 0], XY[:, 1]
+        sample_r, _ = sst.spearmanr(X, Y)
+
+        # scipy BCa via stats.bootstrap on paired data
+        def spearman_stat(a, b):
+            r, _ = sst.spearmanr(a, b)
+            return r if np.isfinite(r) else 0.0
+        scipy_res = sst.bootstrap(
+            (X, Y), spearman_stat,
+            paired=True, vectorized=False,
+            n_resamples=2000, method="BCa", random_state=rng,
+            confidence_level=0.95,
+        )
+        scipy_lo = float(scipy_res.confidence_interval.low)
+        scipy_hi = float(scipy_res.confidence_interval.high)
+
+        # Our BCa: same paired item resample, then ci_bca with jackknife
+        r_boot = np.empty(2000)
+        for b in range(2000):
+            idx = rng.integers(0, n_items, size=n_items)
+            r_boot[b] = spearman_stat(X[idx], Y[idx])
+        jk = np.empty(n_items)
+        for i in range(n_items):
+            keep = np.ones(n_items, dtype=bool); keep[i] = False
+            jk[i] = spearman_stat(X[keep], Y[keep])
+        ours_lo, ours_hi = ci_bca(sample_r, r_boot, jk, alpha=0.05)
+        rows.append(dict(
+            rho_true=rho_true, n=n_items, sample_r=sample_r,
+            scipy_lo=scipy_lo, scipy_hi=scipy_hi,
+            ours_lo=ours_lo, ours_hi=ours_hi,
+        ))
+    return rows
+
+
+def emit_validation_section(f, rows):
+    f.write(r"\clearpage" + "\n\n")
+    f.write(r"\section*{Validation: BCa cross-check against \texttt{scipy.stats.bootstrap}}" + "\n")
+    f.write(r"""On a vanilla synthetic case (paired bivariate-normal data, no NaNs, no coverage filter, no attenuation correction), our BCa implementation should match \texttt{scipy.stats.bootstrap(method=`BCa')}. The bootstrap distribution and the jackknife pseudo-values are constructed identically by both; the only thing being tested here is that our BCa formula matches the reference. Three known-truth cases below.
+""")
+    f.write("\n")
+    f.write(r"\begin{center}" + "\n")
+    f.write(r"\begin{tabular}{ccccccc}" + "\n")
+    f.write(r"\toprule" + "\n")
+    f.write(r"$\rho_{\text{true}}$ & $n$ & sample $\hat r$ & scipy BCa CI & our BCa CI & $\Delta$ lo & $\Delta$ hi \\" + "\n")
+    f.write(r"\midrule" + "\n")
+    for r in rows:
+        d_lo = r["ours_lo"] - r["scipy_lo"]
+        d_hi = r["ours_hi"] - r["scipy_hi"]
+        f.write(f"{r['rho_true']:.2f} & {r['n']} & {r['sample_r']:+.3f} & "
+                f"[{r['scipy_lo']:+.3f}, {r['scipy_hi']:+.3f}] & "
+                f"[{r['ours_lo']:+.3f}, {r['ours_hi']:+.3f}] & "
+                f"{d_lo:+.4f} & {d_hi:+.4f} \\\\\n")
+    f.write(r"\bottomrule" + "\n")
+    f.write(r"\end{tabular}" + "\n")
+    f.write(r"\end{center}" + "\n\n")
+    f.write(r"""\textbf{Reading the table.} The $\Delta$ columns are (ours $-$ scipy). They will not be exactly zero --- the two implementations use independent random streams, so the bootstrap distributions sampled are different. Agreement to within $\sim$0.02--0.05 across both endpoints is the expected outcome and indicates our formula and scipy's are computing the same quantity. Differences larger than that would suggest a bug in our BCa.
+""")
+    f.write("\n")
+
+
 def emit_methods_note(f):
     f.write(r"\section*{Methods note}" + "\n")
     f.write(r"""All correlations are Spearman. Within-group reliabilities are split-half (Spearman--Brown corrected) computed by participant split. Attenuation correction applied as $\hat r^* = \hat r / \sqrt{\hat\rho^{\mathrm{SB}}_A \hat\rho^{\mathrm{SB}}_B}$; \emph{not} clamped to $[-1, 1]$ (when within-group reliabilities are small relative to the raw correlation, $\hat r^*$ can legitimately exceed 1 --- this is a property of the formula and a substantive observation about within-group noise, not a numerical failure). Bootstrap CIs computed three ways from the same resampled distribution: \textbf{percentile} (the $[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}]$ quantiles), \textbf{Fisher-$z$ back-transformed} (normal-approx CI on the $z$-scale, using bootstrap $z$-space SD, centered on $\mathrm{atanh}(\hat r)$), and \textbf{BCa} (bias-corrected and accelerated with jackknife). The headline is percentile; BCa is shown in the diagnostic table. We chose percentile as the headline after observing that BCa misfires in cells with low within-group reliability (Tsimane' Globalized-Music) --- there the bias correction $\hat z_0$ becomes extreme and the corrected interval excludes the sample point estimate. Percentile is conservative under skew (wider than warranted) but doesn't break in that pathological way. Paired-bootstrap comparisons share the resample of any group that appears in both correlations under test; $p$-values are reported under two definitions, recentered-null (recommended) and straddle-zero (legacy).
@@ -450,7 +557,7 @@ def emit_methods_note(f):
     f.write("\n")
 
 
-def write_results_tex(results_by_cond, out_path):
+def write_results_tex(results_by_cond, out_path, scipy_rows=None):
     with open(out_path, "w") as f:
         f.write(PREAMBLE
                 .replace("NBOOT_PLACEHOLDER", str(N_BOOT))
@@ -460,6 +567,8 @@ def write_results_tex(results_by_cond, out_path):
         for cond, out in results_by_cond.items():
             emit_section(f, cond, out)
         emit_methods_note(f)
+        if scipy_rows is not None:
+            emit_validation_section(f, scipy_rows)
         f.write(POSTAMBLE)
 
 
@@ -488,9 +597,18 @@ def main():
             print(f"  wrote {ci_path}")
         results_by_cond[cond] = out
 
+    # scipy.stats.bootstrap cross-check (validation appendix)
+    print("\nRunning scipy.stats.bootstrap cross-check ...")
+    scipy_rows = run_scipy_crosscheck(seed=42)
+    for r in scipy_rows:
+        print(f"  rho={r['rho_true']:.2f} n={r['n']}: "
+              f"sample r={r['sample_r']:+.3f}  "
+              f"scipy=[{r['scipy_lo']:+.3f}, {r['scipy_hi']:+.3f}]  "
+              f"ours=[{r['ours_lo']:+.3f}, {r['ours_hi']:+.3f}]")
+
     # Emit LaTeX
     tex_path = OUT_DIR / "results.tex"
-    write_results_tex(results_by_cond, tex_path)
+    write_results_tex(results_by_cond, tex_path, scipy_rows=scipy_rows)
     print(f"\nWrote {tex_path}")
     print("Next: pdflatex results.tex   (twice for refs)")
 
