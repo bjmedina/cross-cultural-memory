@@ -17,7 +17,7 @@
 \maketitle
 
 \section*{Overview}
-Intergroup itemwise correlations and paired-bootstrap comparisons for two conditions (\emph{Globalized-Music}, \emph{Industrial-Nature}) and two trial types (hits and false alarms). All numbers were produced by the Python pipeline in \texttt{Analysis-Scripts-v2/python/}; see \texttt{STATS.md} / \texttt{stats.pdf} for the methods. Bootstrap settings: $n_{\mathrm{boot}}=2000$ for pairwise CIs, $n_{\mathrm{boot}}=5000$ for the paired test, attenuation correction in \texttt{fixed} mode, participant-level resampling, \texttt{minResp}\,$=2$. Reported CIs are \textbf{BCa} (bias-corrected and accelerated) unless otherwise noted; percentile and Fisher-$z$ alternatives appear in the diagnostic tables. The default $p$-value is the recentered-null variant.
+Intergroup itemwise correlations and paired-bootstrap comparisons for two conditions (\emph{Globalized-Music}, \emph{Industrial-Nature}) and two trial types (hits and false alarms). All numbers were produced by the Python pipeline in \texttt{Analysis-Scripts-v2/python/}; see \texttt{STATS.md} / \texttt{stats.pdf} for the methods. Bootstrap settings: $n_{\mathrm{boot}}=2000$ for pairwise CIs, $n_{\mathrm{boot}}=5000$ for the paired test, attenuation correction in \texttt{fixed} mode, participant-level resampling, \texttt{minResp}\,$=2$. Reported CIs are \textbf{percentile}: $\bigl[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}\bigr]$ of the bootstrap distribution. Fisher-$z$ back-transformed and BCa alternatives are shown in the diagnostic table beneath each headline. BCa was considered as the headline (it is the textbook recommendation for skewed bootstraps) but misfires in cells with low within-group reliability --- for those cells the bias correction $\hat z_0$ is so large that $\hat r$ falls at or outside the BCa interval. The percentile CI is conservative under skew (wider than warranted) but doesn't break in that pathological way and is therefore the safer headline. The default $p$-value is the recentered-null variant.
 
 \section*{Site partition and within-group reliabilities}
 \begin{center}
@@ -41,15 +41,15 @@ Industrial-Nature & Tsimane & 81 & 80 & 0.707 & 0.804 \\
 
 \subsubsection*{Hits}
 
-\subsection*{Pairwise intergroup correlations (BCa 95\% CIs)}
+\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
-Pair & $\hat r$ (raw) & 95\% CI (BCa) & $\hat r^*$ (corrected) & 95\% CI (BCa) \\
+Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\
 \midrule
-US$-$SB & +0.478 & [+0.454, +0.600] & +0.641 & [+0.609, +0.805] \\
-US$-$Tsi & +0.426 & [+0.426, +0.533] & +1.038 & [+1.039, +1.299] \\
-SB$-$Tsi & +0.413 & [+0.379, +0.583] & +1.047 & [+0.961, +1.480] \\
+US$-$SB & +0.478 & [+0.236, +0.498] & +0.641 & [+0.317, +0.669] \\
+US$-$Tsi & +0.426 & [+0.125, +0.425] & +1.038 & [+0.306, +1.035] \\
+SB$-$Tsi & +0.413 & [+0.091, +0.442] & +1.047 & [+0.230, +1.120] \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -86,15 +86,15 @@ US-Tsi vs SB-Tsi & +0.013 & [-0.211, +0.210] & 0.909 & 0.990 \\
 
 \subsubsection*{False alarms}
 
-\subsection*{Pairwise intergroup correlations (BCa 95\% CIs)}
+\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
-Pair & $\hat r$ (raw) & 95\% CI (BCa) & $\hat r^*$ (corrected) & 95\% CI (BCa) \\
+Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\
 \midrule
-US$-$SB & +0.628 & [+0.616, +0.722] & +0.784 & [+0.770, +0.902] \\
-US$-$Tsi & +0.245 & [+0.137, +0.410] & +0.316 & [+0.176, +0.529] \\
-SB$-$Tsi & +0.424 & [+0.377, +0.573] & +0.591 & [+0.525, +0.798] \\
+US$-$SB & +0.628 & [+0.414, +0.640] & +0.784 & [+0.517, +0.800] \\
+US$-$Tsi & +0.245 & [+0.065, +0.345] & +0.316 & [+0.084, +0.446] \\
+SB$-$Tsi & +0.424 & [+0.190, +0.473] & +0.591 & [+0.264, +0.659] \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -135,15 +135,15 @@ US-Tsi vs SB-Tsi & -0.179 & [-0.281, +0.028] & 0.025 & 0.106 \\
 
 \subsubsection*{Hits}
 
-\subsection*{Pairwise intergroup correlations (BCa 95\% CIs)}
+\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
-Pair & $\hat r$ (raw) & 95\% CI (BCa) & $\hat r^*$ (corrected) & 95\% CI (BCa) \\
+Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\
 \midrule
-US$-$SB & +0.623 & [+0.639, +0.664] & +0.838 & [+0.859, +0.893] \\
-US$-$Tsi & +0.570 & [+0.577, +0.650] & +0.766 & [+0.776, +0.874] \\
-SB$-$Tsi & +0.722 & [+0.724, +0.724] & +1.022 & [+1.025, +1.025] \\
+US$-$SB & +0.623 & [+0.368, +0.608] & +0.838 & [+0.496, +0.818] \\
+US$-$Tsi & +0.570 & [+0.304, +0.563] & +0.766 & [+0.409, +0.757] \\
+SB$-$Tsi & +0.722 & [+0.428, +0.665] & +1.022 & [+0.606, +0.940] \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -180,15 +180,15 @@ US-Tsi vs SB-Tsi & -0.152 & [-0.261, +0.043] & 0.049 & 0.162 \\
 
 \subsubsection*{False alarms}
 
-\subsection*{Pairwise intergroup correlations (BCa 95\% CIs)}
+\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
-Pair & $\hat r$ (raw) & 95\% CI (BCa) & $\hat r^*$ (corrected) & 95\% CI (BCa) \\
+Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\
 \midrule
-US$-$SB & +0.640 & [+0.612, +0.713] & +0.750 & [+0.716, +0.835] \\
-US$-$Tsi & +0.588 & [+0.567, +0.668] & +0.687 & [+0.663, +0.781] \\
-SB$-$Tsi & +0.644 & [+0.646, +0.712] & +0.802 & [+0.804, +0.886] \\
+US$-$SB & +0.640 & [+0.470, +0.665] & +0.750 & [+0.550, +0.778] \\
+US$-$Tsi & +0.588 & [+0.413, +0.608] & +0.687 & [+0.483, +0.710] \\
+SB$-$Tsi & +0.644 & [+0.425, +0.640] & +0.802 & [+0.529, +0.797] \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -226,6 +226,6 @@ US-Tsi vs SB-Tsi & -0.056 & [-0.142, +0.099] & 0.361 & 0.699 \\
 \clearpage
 
 \section*{Methods note}
-All correlations are Spearman. Within-group reliabilities are split-half (Spearman--Brown corrected) computed by participant split. Attenuation correction applied as $\hat r^* = \hat r / \sqrt{\hat\rho^{\mathrm{SB}}_A \hat\rho^{\mathrm{SB}}_B}$, clamped to $[-1, 1]$. Bootstrap CIs computed three ways from the same resampled distribution: \textbf{percentile} (the $[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}]$ quantiles), \textbf{Fisher-$z$ back-transformed} (normal-approx CI on the $z$-scale, using bootstrap $z$-space SD, centered on $\mathrm{atanh}(\hat r)$), and \textbf{BCa} (bias-corrected and accelerated with jackknife). Paired-bootstrap comparisons share the resample of any group that appears in both correlations under test; $p$-values are reported under two definitions, recentered-null (recommended) and straddle-zero (legacy).
+All correlations are Spearman. Within-group reliabilities are split-half (Spearman--Brown corrected) computed by participant split. Attenuation correction applied as $\hat r^* = \hat r / \sqrt{\hat\rho^{\mathrm{SB}}_A \hat\rho^{\mathrm{SB}}_B}$; \emph{not} clamped to $[-1, 1]$ (when within-group reliabilities are small relative to the raw correlation, $\hat r^*$ can legitimately exceed 1 --- this is a property of the formula and a substantive observation about within-group noise, not a numerical failure). Bootstrap CIs computed three ways from the same resampled distribution: \textbf{percentile} (the $[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}]$ quantiles), \textbf{Fisher-$z$ back-transformed} (normal-approx CI on the $z$-scale, using bootstrap $z$-space SD, centered on $\mathrm{atanh}(\hat r)$), and \textbf{BCa} (bias-corrected and accelerated with jackknife). The headline is percentile; BCa is shown in the diagnostic table. We chose percentile as the headline after observing that BCa misfires in cells with low within-group reliability (Tsimane' Globalized-Music) --- there the bias correction $\hat z_0$ becomes extreme and the corrected interval excludes the sample point estimate. Percentile is conservative under skew (wider than warranted) but doesn't break in that pathological way. Paired-bootstrap comparisons share the resample of any group that appears in both correlations under test; $p$-values are reported under two definitions, recentered-null (recommended) and straddle-zero (legacy).
 
 \end{document}

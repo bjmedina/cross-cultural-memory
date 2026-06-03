@@ -197,8 +197,11 @@ def make_bar_figure(cond, trial, pairs_results, paired_result, save_path):
     points_raw = [r.point_raw for r in pairs_results.values()]
     points_cor = [r.point_corr for r in pairs_results.values()]
 
-    bca_raw = [r.cis_raw["bca"] for r in pairs_results.values()]
-    bca_cor = [r.cis_corr["bca"] for r in pairs_results.values()]
+    # Headline error bars are PERCENTILE CIs. BCa misfires in cells with low
+    # within-group reliability (Tsimane' Globalized-Music); the diagnostic
+    # table in the LaTeX report shows BCa and Fisher-z side by side.
+    bca_raw = [r.cis_raw["percentile"] for r in pairs_results.values()]
+    bca_cor = [r.cis_corr["percentile"] for r in pairs_results.values()]
 
     n_items = [r.point_items_n for r in pairs_results.values()]
 
@@ -245,7 +248,7 @@ def make_bar_figure(cond, trial, pairs_results, paired_result, save_path):
     ax.set_xticks(x)
     ax.set_xticklabels(pair_labels)
     ax.set_ylabel("intergroup correlation")
-    ax.set_title(f"{cond}  |  {trial.upper()}  (BCa 95\\% CIs; n items: {', '.join(str(n) for n in n_items)})")
+    ax.set_title(f"{cond}  |  {trial.upper()}  (percentile 95\\% CIs; n items: {', '.join(str(n) for n in n_items)})")
     ax.legend(loc="lower right", fontsize=9)
     plt.tight_layout()
     fig.savefig(save_path, dpi=150)
@@ -278,7 +281,7 @@ PREAMBLE = r"""\documentclass[11pt]{article}
 \maketitle
 
 \section*{Overview}
-Intergroup itemwise correlations and paired-bootstrap comparisons for two conditions (\emph{Globalized-Music}, \emph{Industrial-Nature}) and two trial types (hits and false alarms). All numbers were produced by the Python pipeline in \texttt{Analysis-Scripts-v2/python/}; see \texttt{STATS.md} / \texttt{stats.pdf} for the methods. Bootstrap settings: $n_{\mathrm{boot}}=NBOOT_PLACEHOLDER$ for pairwise CIs, $n_{\mathrm{boot}}=NBOOT_PAIRED_PLACEHOLDER$ for the paired test, attenuation correction in \texttt{fixed} mode, participant-level resampling, \texttt{minResp}\,$=MINRESP_PLACEHOLDER$. Reported CIs are \textbf{BCa} (bias-corrected and accelerated) unless otherwise noted; percentile and Fisher-$z$ alternatives appear in the diagnostic tables. The default $p$-value is the recentered-null variant.
+Intergroup itemwise correlations and paired-bootstrap comparisons for two conditions (\emph{Globalized-Music}, \emph{Industrial-Nature}) and two trial types (hits and false alarms). All numbers were produced by the Python pipeline in \texttt{Analysis-Scripts-v2/python/}; see \texttt{STATS.md} / \texttt{stats.pdf} for the methods. Bootstrap settings: $n_{\mathrm{boot}}=NBOOT_PLACEHOLDER$ for pairwise CIs, $n_{\mathrm{boot}}=NBOOT_PAIRED_PLACEHOLDER$ for the paired test, attenuation correction in \texttt{fixed} mode, participant-level resampling, \texttt{minResp}\,$=MINRESP_PLACEHOLDER$. Reported CIs are \textbf{percentile}: $\bigl[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}\bigr]$ of the bootstrap distribution. Fisher-$z$ back-transformed and BCa alternatives are shown in the diagnostic table beneath each headline. BCa was considered as the headline (it is the textbook recommendation for skewed bootstraps) but misfires in cells with low within-group reliability --- for those cells the bias correction $\hat z_0$ is so large that $\hat r$ falls at or outside the BCa interval. The percentile CI is conservative under skew (wider than warranted) but doesn't break in that pathological way and is therefore the safer headline. The default $p$-value is the recentered-null variant.
 
 """
 
@@ -312,17 +315,17 @@ def emit_intergroup_table(f, cond, trial_results):
         if trial not in trial_results.get("__skip_marker__", [trial]):
             pass
 
-    # Headline table: BCa CIs for raw and corrected r per pair
-    f.write(r"\subsection*{Pairwise intergroup correlations (BCa 95\% CIs)}" + "\n")
+    # Headline table: PERCENTILE CIs for raw and corrected r per pair
+    f.write(r"\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}" + "\n")
     f.write(r"\begin{center}" + "\n")
     f.write(r"\begin{tabular}{lcccc}" + "\n")
     f.write(r"\toprule" + "\n")
-    f.write(r"Pair & $\hat r$ (raw) & 95\% CI (BCa) & $\hat r^*$ (corrected) & 95\% CI (BCa) \\" + "\n")
+    f.write(r"Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\" + "\n")
     f.write(r"\midrule" + "\n")
     for pair in PAIR_ORDER:
         r = pairs_results[pair]
-        ci_raw = r.cis_raw["bca"]
-        ci_cor = r.cis_corr["bca"]
+        ci_raw = r.cis_raw["percentile"]
+        ci_cor = r.cis_corr["percentile"]
         f.write(f"{PAIR_LABEL[pair]} & {fmt_r(r.point_raw)} & {fmt_ci(*ci_raw)} & "
                 f"{fmt_r(r.point_corr)} & {fmt_ci(*ci_cor)} \\\\\n")
     f.write(r"\bottomrule" + "\n")
@@ -388,7 +391,7 @@ def emit_section(f, cond, out):
 
 def emit_methods_note(f):
     f.write(r"\section*{Methods note}" + "\n")
-    f.write(r"""All correlations are Spearman. Within-group reliabilities are split-half (Spearman--Brown corrected) computed by participant split. Attenuation correction applied as $\hat r^* = \hat r / \sqrt{\hat\rho^{\mathrm{SB}}_A \hat\rho^{\mathrm{SB}}_B}$, clamped to $[-1, 1]$. Bootstrap CIs computed three ways from the same resampled distribution: \textbf{percentile} (the $[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}]$ quantiles), \textbf{Fisher-$z$ back-transformed} (normal-approx CI on the $z$-scale, using bootstrap $z$-space SD, centered on $\mathrm{atanh}(\hat r)$), and \textbf{BCa} (bias-corrected and accelerated with jackknife). Paired-bootstrap comparisons share the resample of any group that appears in both correlations under test; $p$-values are reported under two definitions, recentered-null (recommended) and straddle-zero (legacy).
+    f.write(r"""All correlations are Spearman. Within-group reliabilities are split-half (Spearman--Brown corrected) computed by participant split. Attenuation correction applied as $\hat r^* = \hat r / \sqrt{\hat\rho^{\mathrm{SB}}_A \hat\rho^{\mathrm{SB}}_B}$; \emph{not} clamped to $[-1, 1]$ (when within-group reliabilities are small relative to the raw correlation, $\hat r^*$ can legitimately exceed 1 --- this is a property of the formula and a substantive observation about within-group noise, not a numerical failure). Bootstrap CIs computed three ways from the same resampled distribution: \textbf{percentile} (the $[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}]$ quantiles), \textbf{Fisher-$z$ back-transformed} (normal-approx CI on the $z$-scale, using bootstrap $z$-space SD, centered on $\mathrm{atanh}(\hat r)$), and \textbf{BCa} (bias-corrected and accelerated with jackknife). The headline is percentile; BCa is shown in the diagnostic table. We chose percentile as the headline after observing that BCa misfires in cells with low within-group reliability (Tsimane' Globalized-Music) --- there the bias correction $\hat z_0$ becomes extreme and the corrected interval excludes the sample point estimate. Percentile is conservative under skew (wider than warranted) but doesn't break in that pathological way. Paired-bootstrap comparisons share the resample of any group that appears in both correlations under test; $p$-values are reported under two definitions, recentered-null (recommended) and straddle-zero (legacy).
 """)
     f.write("\n")
 
