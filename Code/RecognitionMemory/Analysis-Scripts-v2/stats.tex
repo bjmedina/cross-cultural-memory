@@ -148,7 +148,7 @@ Reliability-corrected (``disattenuated'') correlations follow the classical Spea
 \hat r^{*}_{AB} = \frac{\hat r_{AB}}{\sqrt{\hat\rho_{\mathrm{SB}}^{A}\,\hat\rho_{\mathrm{SB}}^{B}}}.
 \label{eq:atten}
 \end{equation}
-The denominator is floored at machine epsilon and the corrected estimate is clamped to $[-1,1]$. Three modes select which reliability is used inside the bootstrap:
+The denominator is floored at machine epsilon to prevent division by very small reliabilities. \textbf{Corrected correlations are not clamped} to $[-1,1]$: when one or both within-group reliabilities are small relative to the raw intergroup correlation, $\hat r^*$ can legitimately exceed $\pm 1$. This is a property of the formula, not a numerical failure --- it indicates that the attenuation-corrected relationship at the group level is stronger than the geometric mean of the within-group reliabilities can support, which is itself a substantive observation about how noisy the within-group item structure is. Clamping would hide that signal. Three modes select which reliability is used inside the bootstrap:
 \begin{description}
 \item[\texttt{`fixed'}] full-sample $\hat\rho_{\mathrm{SB}}^{A,B}$ are used unchanged in every iteration. Fast; conservative.
 \item[\texttt{`subset'}] reliabilities are recomputed once on the items surviving the coverage filter at the point estimate, then held fixed.

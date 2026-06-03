@@ -53,7 +53,7 @@ function [jk_raw, jk_corr] = jackknifeIntergroupCorr(A, B, varargin)
 
     if isfinite(o.SB_A) && isfinite(o.SB_B)
         denom = max(sqrt(max(o.SB_A * o.SB_B, 0)), eps);
-        jk_corr = max(-1, min(1, jk_raw / denom));
+        jk_corr = jk_raw / denom;  % not clamped (see bootstrapIntergroupCorrelationSEM)
     else
         jk_corr = nan(size(jk_raw));
     end

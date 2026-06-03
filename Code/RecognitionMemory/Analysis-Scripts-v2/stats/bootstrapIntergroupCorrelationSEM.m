@@ -70,7 +70,10 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
         end
         SB_A_point = SB_A_use; SB_B_point = SB_B_use;
         if ~isnan(SB_A_use) && ~isnan(SB_B_use)
-            r_point_corr = clamp_unit(r_point_raw / max(sqrt(SB_A_use*SB_B_use), eps));
+            % NOT clamped to [-1, 1]. Disattenuated r can legitimately exceed
+            % 1 when within-group reliabilities are small relative to the raw
+            % intergroup correlation; clamping hides that signal.
+            r_point_corr = r_point_raw / max(sqrt(SB_A_use*SB_B_use), eps);
         end
     end
 
@@ -132,7 +135,7 @@ function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varar
                     SB_B = splitHalfSB(B_draw, corrType, ceil(opt.SplitHalfRepeats/2), splitDim);
             end
             if ~isnan(SB_A) && ~isnan(SB_B)
-                rBoot_corr(b) = clamp_unit(r / max(sqrt(SB_A*SB_B), eps));
+                rBoot_corr(b) = r / max(sqrt(SB_A*SB_B), eps);  % not clamped
             end
         end
     end
@@ -221,7 +224,7 @@ end
 % ---- helpers ----
 % compute_r_on_items and splitHalfSB live in stats/itemwiseCorr.m and
 % stats/splitHalfSB.m respectively; reused across stats functions.
-function x = clamp_unit(x), x=max(-1,min(1,x)); end
+% clamp_unit removed: disattenuated correlations may exceed +/-1 by design.
 
 % function outs = bootstrapIntergroupCorrelationSEM(outsA, outsB, trialType, varargin)
 % % Participant-bootstrap SEM/CI for intergroup itemwise correlations

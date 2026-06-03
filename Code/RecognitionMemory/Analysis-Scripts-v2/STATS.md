@@ -119,7 +119,7 @@ Reliability-corrected ("disattenuated") itemwise correlations are reported along
 
 $$\hat r^{*}_{AB} = \frac{\hat r_{AB}}{\sqrt{\hat\rho_{SB}^{A}\,\hat\rho_{SB}^{B}}}.$$
 
-To prevent division by very small reliabilities, the denominator is floored at machine epsilon; corrected correlations are then clamped to $[-1, 1]$. Three modes select which reliability is used inside the bootstrap:
+The denominator is floored at machine epsilon to prevent division by very small reliabilities. **Corrected correlations are not clamped** to $[-1, 1]$: when one or both within-group reliabilities are small relative to the raw intergroup correlation, $\hat r^*$ can legitimately exceed $\pm 1$. This is a property of the formula, not a numerical failure — it tells you that the *attenuation-corrected* relationship at the group level is stronger than the geometric mean of the within-group reliabilities can support, which is itself a substantive observation about how noisy the within-group item structure is. Clamping would hide that signal. Values of $|\hat r^*| > 1$ in real output therefore mean "low within-group reliability is driving this estimate"; they should be reported and discussed, not silently bounded. Three modes select which reliability is used inside the bootstrap:
 
 - **`'fixed'`** — the full-sample reliabilities $\hat\rho_{SB}^{A,B}$ from `calculateSplitHalfReliability` are used unchanged in every bootstrap iteration. Fastest; conservative under variation in reliability.
 - **`'subset'`** — reliabilities are recomputed once on the item subset that survives the coverage filter at the *point* estimate, and held fixed across bootstrap iterations.

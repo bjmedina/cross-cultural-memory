@@ -36,3 +36,6 @@ bolivia_2025_sound_recordings-*.zip
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+
+# Results report cache (pickle files for SplitHalfReliability per group)
+Code/RecognitionMemory/Analysis-Scripts-v2/results/_cache/

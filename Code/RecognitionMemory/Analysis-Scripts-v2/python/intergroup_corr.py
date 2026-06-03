@@ -103,7 +103,7 @@ def jackknife_intergroup_corr(
 
     if sb_a is not None and sb_b is not None and np.isfinite(sb_a) and np.isfinite(sb_b):
         denom = max(np.sqrt(max(sb_a * sb_b, 0)), np.finfo(float).eps)
-        jk_corr = np.clip(jk_raw / denom, -1.0, 1.0)
+        jk_corr = jk_raw / denom  # not clamped (see bootstrap_intergroup_correlation_sem)
     else:
         jk_corr = np.full_like(jk_raw, np.nan)
 
@@ -201,7 +201,10 @@ def bootstrap_intergroup_correlation_sem(
         sb_a_point, sb_b_point = sb_a_use, sb_b_use
         if np.isfinite(sb_a_use) and np.isfinite(sb_b_use):
             denom = max(np.sqrt(max(sb_a_use * sb_b_use, 0)), np.finfo(float).eps)
-            r_point_corr = clamp_unit(r_point_raw / denom)
+            # NOT clamped to [-1, 1]. Disattenuated r can legitimately exceed
+            # 1 when within-group reliabilities are small relative to the raw
+            # intergroup correlation; clamping hides that signal.
+            r_point_corr = r_point_raw / denom
 
     # ---- bootstrap ----
     r_boot_raw = np.full(n_boot, np.nan)
@@ -260,7 +263,7 @@ def bootstrap_intergroup_correlation_sem(
                 )
             if np.isfinite(sb_a) and np.isfinite(sb_b):
                 denom = max(np.sqrt(max(sb_a * sb_b, 0)), np.finfo(float).eps)
-                r_boot_corr[b] = clamp_unit(r / denom)
+                r_boot_corr[b] = r / denom  # not clamped (see point-estimate note)
 
     # ---- jackknife (for BCa acceleration) ----
     jk_raw, jk_corr = jackknife_intergroup_corr(
