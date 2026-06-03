@@ -256,6 +256,56 @@ def make_bar_figure(cond, trial, pairs_results, paired_result, save_path):
 
 
 # ----------------------------------------------------------------------------
+# Figure: side-by-side CI methods (percentile / Fisher-z / BCa)
+# ----------------------------------------------------------------------------
+def make_ci_comparison_figure(cond, trial, pairs_results, save_path):
+    """Per-pair overlay of all three CI methods on the attenuation-corrected r.
+
+    For each of the three group pairs we draw three error bars side by side,
+    one per CI method. A red x marks the point estimate when it falls outside
+    the corresponding CI (BCa pathology surfaces this way).
+    """
+    pair_labels = [PAIR_LABEL[p] for p in pairs_results.keys()]
+    points = [r.point_corr for r in pairs_results.values()]
+    methods = ("percentile", "fisher_z", "bca")
+    colors  = {"percentile": "#888888", "fisher_z": "#4060b0", "bca": "#b04040"}
+    offsets = {"percentile": -0.22, "fisher_z": 0.0, "bca": 0.22}
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(len(pair_labels))
+
+    drew_legend = set()
+    for xi, p, res in zip(x, points, pairs_results.values()):
+        if np.isfinite(p):
+            ax.plot([xi - 0.32, xi + 0.32], [p, p], color="k", lw=0.7, alpha=0.4)
+        for m in methods:
+            lo, hi = res.cis_corr[m]
+            if not (np.isfinite(lo) and np.isfinite(hi) and np.isfinite(p)):
+                continue
+            lo_half = max(0.0, p - lo)
+            hi_half = max(0.0, hi - p)
+            label = m if m not in drew_legend else None
+            ax.errorbar([xi + offsets[m]], [p],
+                        yerr=[[lo_half], [hi_half]],
+                        fmt="o", color=colors[m], ecolor=colors[m],
+                        capsize=4, lw=1.4, markersize=5, label=label)
+            drew_legend.add(m)
+            if p < lo or p > hi:
+                ax.plot([xi + offsets[m]], [p],
+                        marker="x", color="red", markersize=8, mew=1.5)
+
+    ax.axhline(0, color="k", lw=0.5, alpha=0.4)
+    ax.axhline(1, color="k", lw=0.5, alpha=0.3, ls=":")
+    ax.set_xticks(x); ax.set_xticklabels(pair_labels)
+    ax.set_ylabel(r"corrected $\hat r^*$")
+    ax.set_title(f"{cond} | {trial.upper()}  --  CI methods overlay")
+    ax.legend(loc="upper left", fontsize=9, frameon=True)
+    plt.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+# ----------------------------------------------------------------------------
 # LaTeX emission
 # ----------------------------------------------------------------------------
 def latex_escape(s: str) -> str:
@@ -307,7 +357,7 @@ def emit_group_table(f, results_by_cond):
     f.write(r"\end{center}" + "\n\n")
 
 
-def emit_intergroup_table(f, cond, trial_results):
+def emit_intergroup_table(f, cond, trial, trial_results):
     pairs_results = trial_results["pairs"]
     paired = trial_results["paired"]
 
@@ -334,6 +384,10 @@ def emit_intergroup_table(f, cond, trial_results):
 
     # Diagnostic: all three CI methods on corrected r
     f.write(r"\subsection*{Diagnostic --- alternative CIs on corrected $\hat r^*$}" + "\n")
+    f.write(r"\begin{center}" + "\n")
+    f.write(r"\includegraphics[width=0.85\textwidth]{figures/ci_compare_" + cond + "_" + trial + ".png}" + "\n")
+    f.write(r"\end{center}" + "\n\n")
+
     f.write(r"\begin{center}" + "\n")
     f.write(r"\begin{tabular}{lcccc}" + "\n")
     f.write(r"\toprule" + "\n")
@@ -381,7 +435,7 @@ def emit_section(f, cond, out):
         kind = "Hits" if trial == "hit" else "False alarms"
         f.write(r"\subsubsection*{" + kind + "}" + "\n\n")
         trial_results = out["trials"][trial]
-        emit_intergroup_table(f, cond, trial_results)
+        emit_intergroup_table(f, cond, trial, trial_results)
         fig_rel = f"figures/bar_{cond}_{trial}.png"
         f.write(r"\begin{center}" + "\n")
         f.write(r"\includegraphics[width=0.85\textwidth]{" + fig_rel + "}" + "\n")
@@ -429,6 +483,9 @@ def main():
             fig_path = FIG_DIR / f"bar_{cond}_{trial}.png"
             make_bar_figure(cond, trial, trial_results["pairs"], trial_results["paired"], fig_path)
             print(f"  wrote {fig_path}")
+            ci_path = FIG_DIR / f"ci_compare_{cond}_{trial}.png"
+            make_ci_comparison_figure(cond, trial, trial_results["pairs"], ci_path)
+            print(f"  wrote {ci_path}")
         results_by_cond[cond] = out
 
     # Emit LaTeX
