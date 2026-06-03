@@ -52,7 +52,7 @@ CACHE_DIR = HERE / "_cache"
 CACHE_DIR.mkdir(exist_ok=True)
 CACHE_VERSION = 1  # bump to invalidate all cached groups
 
-CONDITIONS = ("Globalized-Music", "Industrial-Nature")
+CONDITIONS = ("Globalized-Music", "Industrial-Nature", "NHS")
 TRIAL_TYPES = ("hit", "fa")
 SITES = {
     "US": ("PRO", "BOS", "CAM"),

@@ -33,6 +33,10 @@ Industrial-Nature & US & 141 & 80 & 0.782 & 0.910 \\
 Industrial-Nature & SanBorja & 56 & 80 & 0.707 & 0.802 \\
 Industrial-Nature & Tsimane & 81 & 80 & 0.707 & 0.804 \\
 \midrule
+NHS & US & 94 & 80 & 0.650 & 0.911 \\
+NHS & SanBorja & 49 & 80 & 0.680 & 0.852 \\
+NHS & Tsimane & 76 & 80 & 0.649 & 0.834 \\
+\midrule
 \bottomrule
 \end{tabular}
 \end{center}
@@ -221,6 +225,100 @@ US-Tsi vs SB-Tsi & -0.056 & [-0.142, +0.099] & 0.361 & 0.699 \\
 
 \begin{center}
 \includegraphics[width=0.85\textwidth]{figures/bar_Industrial-Nature_fa.png}
+\end{center}
+
+\clearpage
+
+\section*{NHS}
+
+\subsubsection*{Hits}
+
+\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\
+\midrule
+US$-$SB & +0.491 & [+0.255, +0.511] & +0.739 & [+0.383, +0.769] \\
+US$-$Tsi & +0.474 & [+0.231, +0.502] & +0.730 & [+0.356, +0.773] \\
+SB$-$Tsi & +0.537 & [+0.260, +0.542] & +0.808 & [+0.391, +0.816] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Diagnostic --- alternative CIs on corrected $\hat r^*$}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Pair & $\hat r^*$ & Percentile 95\% CI & Fisher-$z$ 95\% CI & BCa 95\% CI \\
+\midrule
+US$-$SB & +0.739 & [+0.383, +0.769] & [+0.562, +0.851] & [+0.700, +0.865] \\
+US$-$Tsi & +0.730 & [+0.356, +0.773] & [+0.529, +0.853] & [+0.682, +0.962] \\
+SB$-$Tsi & +0.808 & [+0.391, +0.816] & [+0.632, +0.905] & [+0.797, +0.928] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Paired-bootstrap comparison}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Comparison & Observed diff & 95\% CI (diff) & $p$ (recentered) & $p$ (straddle) \\
+\midrule
+US-SB vs US-Tsi & +0.017 & [-0.148, +0.182] & 0.836 & 0.819 \\
+US-SB vs SB-Tsi & -0.046 & [-0.204, +0.155] & 0.626 & 0.802 \\
+US-Tsi vs SB-Tsi & -0.063 & [-0.223, +0.132] & 0.486 & 0.630 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\includegraphics[width=0.85\textwidth]{figures/bar_NHS_hit.png}
+\end{center}
+
+\subsubsection*{False alarms}
+
+\subsection*{Pairwise intergroup correlations (percentile 95\% CIs)}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Pair & $\hat r$ (raw) & 95\% CI & $\hat r^*$ (corrected) & 95\% CI \\
+\midrule
+US$-$SB & +0.768 & [+0.624, +0.780] & +0.872 & [+0.708, +0.885] \\
+US$-$Tsi & +0.753 & [+0.580, +0.749] & +0.864 & [+0.666, +0.860] \\
+SB$-$Tsi & +0.748 & [+0.533, +0.751] & +0.887 & [+0.632, +0.891] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Diagnostic --- alternative CIs on corrected $\hat r^*$}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Pair & $\hat r^*$ & Percentile 95\% CI & Fisher-$z$ 95\% CI & BCa 95\% CI \\
+\midrule
+US$-$SB & +0.872 & [+0.708, +0.885] & [+0.795, +0.921] & [+0.859, +0.930] \\
+US$-$Tsi & +0.864 & [+0.666, +0.860] & [+0.786, +0.915] & [+0.872, +0.913] \\
+SB$-$Tsi & +0.887 & [+0.632, +0.891] & [+0.783, +0.943] & [+0.884, +0.986] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Paired-bootstrap comparison}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Comparison & Observed diff & 95\% CI (diff) & $p$ (recentered) & $p$ (straddle) \\
+\midrule
+US-SB vs US-Tsi & +0.015 & [-0.080, +0.149] & 0.783 & 0.531 \\
+US-SB vs SB-Tsi & +0.020 & [-0.053, +0.165] & 0.716 & 0.350 \\
+US-Tsi vs SB-Tsi & +0.005 & [-0.098, +0.138] & 0.926 & 0.757 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\includegraphics[width=0.85\textwidth]{figures/bar_NHS_fa.png}
 \end{center}
 
 \clearpage
