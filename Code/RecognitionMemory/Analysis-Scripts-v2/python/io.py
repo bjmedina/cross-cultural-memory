@@ -95,6 +95,7 @@ def list_matfiles(
     condition: str,
     min_isi0_dprime: float = 2.0,
     is_multi_isi: bool = False,
+    min_trials: int = 120,
 ) -> list[Path]:
     """Return .mat files for the given site codes and condition, filtered by
     d' at ISI=0.
@@ -109,6 +110,9 @@ def list_matfiles(
       - `is_multi_isi=False` (default) keeps single-ISI sessions; `True` keeps
         only files with `_Multi-p` (multi-ISI experiment).
       - d' at ISI=0 (computed on the fly, not stored) must be >= min_isi0_dprime.
+      - only completed sessions are kept: a participant must have at least
+        `min_trials` trials (default 120 = a full session). Set min_trials=0 to
+        include partial/aborted sessions.
     """
     base_dir = Path(base_dir)
     place_codes = set(place_codes)
@@ -138,6 +142,8 @@ def list_matfiles(
         rp = np.asarray(d.get("repeatPosition", np.empty(0))).ravel().astype(float)
         corr = np.asarray(d.get("isResponseCorrect", np.empty(0))).ravel().astype(float)
         if rp.size == 0 or corr.size == 0:
+            continue
+        if rp.size < min_trials:      # incomplete / aborted session
             continue
         dp = compute_dprime_isi0(stims, rp, corr)
         if not np.isfinite(dp) or dp < min_isi0_dprime:
