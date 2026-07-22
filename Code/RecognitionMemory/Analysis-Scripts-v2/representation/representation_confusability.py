@@ -78,15 +78,42 @@ def per_sound_fa(cond, codes):
     return dict(zip(it, v))
 
 
-def model_confusability(emb: dict[str, np.ndarray]) -> dict[str, float]:
-    """Per-sound model confusability = mean cosine similarity to the OTHER sounds in
-    the set. Higher = more like the rest of the set = predicted more confusable."""
+def model_confusability(emb: dict[str, np.ndarray], metric: str = "euclidean",
+                        k: int | None = 5) -> dict[str, float]:
+    """Per-sound model confusability from the k NEAREST neighbors in the set, always
+    signed so HIGHER = more confusable = predicts higher false-alarm rate.
+
+    A false alarm happens when a sound is close to SOMETHING, not to everything, so we
+    use nearest-neighbor structure: for each sound take its k nearest neighbors and
+    average their distance (or similarity).
+      k=1        -> nearest neighbor only (sharpest 'is there anything like it')
+      k=5        -> DEFAULT, small-neighborhood robustness (sweep k=1,3,5)
+      k=None     -> mean over ALL other sounds (the old global measure)
+    metric='euclidean' (DEFAULT, matches the memory model's noise geometry): negative
+        mean distance to the k nearest (closer = more confusable).
+    metric='cosine' (robustness): mean cosine similarity to the k most similar.
+    On L2-normalized embeddings the two give identical Spearman rankings."""
     names = list(emb)
     M = np.stack([emb[n] for n in names]).astype(float)
-    M /= (np.linalg.norm(M, axis=1, keepdims=True) + 1e-12)
-    S = M @ M.T
-    np.fill_diagonal(S, np.nan)
-    return {n: float(np.nanmean(S[i])) for i, n in enumerate(names)}
+    if metric == "cosine":
+        Mn = M / (np.linalg.norm(M, axis=1, keepdims=True) + 1e-12)
+        S = Mn @ Mn.T
+        np.fill_diagonal(S, np.nan)
+        out = {}
+        for i, n in enumerate(names):
+            v = S[i][~np.isnan(S[i])]
+            v = np.sort(v)[::-1][:k] if k else v      # top-k most similar
+            out[n] = float(np.mean(v))
+        return out
+    sq = np.sum(M ** 2, axis=1)
+    D = np.sqrt(np.clip(sq[:, None] + sq[None, :] - 2.0 * (M @ M.T), 0, None))
+    np.fill_diagonal(D, np.nan)
+    out = {}
+    for i, n in enumerate(names):
+        v = D[i][~np.isnan(D[i])]
+        v = np.sort(v)[:k] if k else v                # k smallest distances
+        out[n] = float(-np.mean(v))                   # closer = more confusable
+    return out
 
 
 def main():

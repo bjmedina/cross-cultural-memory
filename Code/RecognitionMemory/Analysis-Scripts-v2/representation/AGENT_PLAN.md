@@ -43,7 +43,9 @@ music, ~0 for world song; and the late-layer gap exceeds the early-layer gap for
                      time_avg=False, device='cuda')
   ```
   Model files: `/orcd/data/jhm/001/om2/bjmedina/models/cochdnn/model_directories/kell2018_word_speaker_audioset/`.
-  Pick TWO layers: one EARLY (near-cochleagram, low-level) and one LATE (deep, learned).
+  Encode at EVERY available layer (a full depth sweep, near-cochleagram through deep),
+  group-independent, one embedding per sound per layer. The early-vs-late contrast then
+  falls out of the depth curve rather than being a hand-picked two-point comparison.
 - **Stimuli.** The 80 sounds per set. Names must match the behavioral names exactly,
   e.g. `mem_stim_14.wav`. Get the canonical per-set name list from behavior:
   `build_hit_fa_matrices(list_matfiles(BASE, CODES[group], cond, 2.0, False))[2]`.
@@ -73,28 +75,51 @@ music, ~0 for world song; and the late-layer gap exceeds the early-layer gap for
 
 ## 3. Phase 2 - model confusability
 
-- **Global (already implemented)** in `representation_confusability.py`: per-sound
-  confusability = mean cosine similarity to the OTHER sounds in the same set.
+**Distance metric (default EUCLIDEAN, cosine as robustness).** Prior chapters read
+memory out with Euclidean distance in embedding space, because the model adds
+isotropic Gaussian noise of a calibrated magnitude there, so magnitude is meaningful.
+For consistency and to tie to that mechanism, DEFAULT to Euclidean distance on the
+same (non-unit) embeddings the model uses, and report cosine as a robustness pass.
+Note the equivalence: for L2-normalized vectors, squared Euclidean = 2 - 2*cosine, a
+strictly decreasing function of cosine, so on normalized embeddings the two give the
+IDENTICAL ranking and therefore identical Spearman results; the choice only matters
+via magnitude (unnormalized). Make the metric a one-line switch and confirm the
+conclusion holds under both; flag where they diverge. A sound's confusability is high
+when it is CLOSE to the other sounds (small distance) or SIMILAR to them (large
+cosine); keep the sign convention explicit so "more confusable" maps to "predicts
+higher FA".
+
+- **kNN over the set (PRIMARY).** Per layer, build the sound x sound distance matrix,
+  then per sound take its k NEAREST neighbors and use the mean of those k smallest
+  distances (negated, so closer = more confusable). A false alarm happens when a sound
+  is close to SOMETHING, not to everything, so nearest-neighbor structure is the right
+  signal; the mean-over-all-sounds measure washes it out. k=1 is the sharpest ("is
+  there anything it is easily mistaken for"); sweep k = 1, 3, 5 as robustness. This
+  generalizes the old measure: k = all sounds recovers the global mean. Already in
+  `representation_confusability.py::model_confusability` (metric + k args); default
+  metric Euclidean, cosine selectable.
 - **Sequence-context (add; more principled).** A foil false-alarms because it is
   similar to what was recently PRESENTED. For each foil presentation, from the
   participant's `stimulusPresented` order and `repeatPosition` (foil = `isnan(rp)`),
-  take the preceding window (e.g. last 8 sounds) and compute max (or mean) cosine
-  similarity of the foil embedding to those context embeddings. Average over all
+  take the preceding window (e.g. last 8 sounds) and compute the min Euclidean distance
+  (or max cosine) of the foil embedding to those context embeddings. Average over all
   presentations of a sound to get its context-confusability. Extract the sequences from
   the raw `.mat` (see `characterize_deep.py` for reading `stimulusPresented`).
   Correlate this with human FA as a second, stronger predictor.
 
 ## 4. Phase 3 - the three tests + statistics
 
-- For each layer x condition x group: Spearman(model confusability, human FA) across
-  the ~80 sounds. Bootstrap over SOUNDS (resample sounds with replacement, recompute)
-  for 95% CIs; the design is stimulus-limited so effective N = number of sounds.
-- **H2/H3 metric:** per layer x condition, `rho_US - rho_Ts` with a bootstrap CI
-  (resample sounds jointly so the two correlations share the resample). Expect
-  positive and largest for music, ~0 for world song.
-- **Layer contrast (H3):** compare early vs late `rho_US - rho_Ts` for music; expect
-  late > early. Optionally sweep all available layers to show a monotonic emergence of
-  the gap with depth.
+- **Per group, per layer, per condition:** Spearman(model confusability, that group's
+  per-sound false-alarm rate) across the ~80 sounds. The confusability (x) is shared
+  across groups; only the human FA (y) is group-specific, so this is one correlation
+  per group. Bootstrap over SOUNDS (resample sounds, recompute) for 95% CIs; the design
+  is stimulus-limited, effective N = number of sounds.
+- **Depth curve (main readout):** plot rho(layer) for each group, per condition. This
+  is where H1 (rho > 0) and H3 (where along the hierarchy the fit lives) both show up.
+- **Gap vs depth (H2/H3):** per layer x condition, `rho_US - rho_Ts` with a bootstrap
+  CI (resample sounds jointly so the two correlations share the resample). Expect the
+  music gap to GROW with depth and the world-song gap to stay flat near zero.
+- Interpret rho against the human FA reliability ceiling (~0.7-0.9), not against 1.0.
 - Multiple comparisons: if making per-cell claims, Holm-correct across the layer x
   condition x group grid, mirroring the behavioral chapter.
 
@@ -102,11 +127,11 @@ music, ~0 for world song; and the late-layer gap exceeds the early-layer gap for
 
 Reuse `skill/scripts/figures.py` conventions (group colors US `#1f77b4`, San Borja
 `#ff7f0e`, Tsimane' `#2E7D32`). Produce:
-1. `representation_confusability.png` (already scaffolded): rho(confusability, FA) by
-   group, per condition, one panel per layer.
-2. A `rho_US - rho_Ts` gap figure: bars per condition, early vs late layer, with
-   bootstrap CIs, mirroring `u_depth.py` styling.
-3. Optional depth-sweep line: the music U.S.-minus-Tsimane' gap vs layer index.
+1. Depth curves: rho(layer) per group, one panel per condition (the main figure).
+2. Gap vs depth: `rho_US - rho_Ts` vs layer, one line per condition, with bootstrap
+   CIs; the music line should rise with depth, world song stay flat near zero.
+3. `representation_confusability.png` (scaffolded): rho by group, per condition, for a
+   representative early and late layer, as a compact summary.
 
 ## 6. Phase 5 - integrate into the chapter
 
