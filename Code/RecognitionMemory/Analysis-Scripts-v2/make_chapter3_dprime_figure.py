@@ -92,7 +92,7 @@ def main(argv=None):
     import matplotlib.pyplot as plt
 
     colors = {"US": "#1f77b4", "SanBorja": "#ff7f0e", "Tsimane": "#2E7D32"}
-    fig, axes = plt.subplots(1, len(PANELS), figsize=(13, 4.3), sharey=True)
+    fig, axes = plt.subplots(1, len(PANELS), figsize=(13, 5.8), sharey=True)
     counts = {}
 
     for ax, (cond, title) in zip(axes, PANELS):
@@ -112,15 +112,16 @@ def main(argv=None):
             all_isis = out["isis"] if all_isis is None else all_isis
         if all_isis is not None:
             ax.set_xticks(all_isis)
-            ax.set_xticklabels(all_isis, fontsize=8)
+            ax.set_xticklabels(all_isis, fontsize=10)
         ax.set_ylim(0, 3.5)
-        ax.set_xlabel("ISI (intervening sounds)")
-        ax.set_title(title)
+        ax.tick_params(axis="y", labelsize=10)
+        ax.set_xlabel("ISI (intervening sounds)", fontsize=13)
+        ax.set_title(title, fontsize=14)
         ax.grid(True, ls="--", alpha=0.4)
-        ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
+        ax.legend(loc="upper right", fontsize=10, framealpha=0.9)
         print(f"{cond}: " + "  ".join(f"{g}={counts[cond][g]}" for g in GROUP_ORDER))
 
-    axes[0].set_ylabel("d' (sensitivity)")
+    axes[0].set_ylabel("d' (sensitivity)", fontsize=14)
     fig.tight_layout()
 
     out_dir = Path(args.out_dir)

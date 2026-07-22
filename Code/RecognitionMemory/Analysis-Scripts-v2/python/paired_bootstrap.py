@@ -81,10 +81,19 @@ def paired_bootstrap_compare_correlations(
     min_resp: int = 2,
     rng: Optional[np.random.Generator] = None,
     verbose: bool = True,
+    ceilings: Optional[dict] = None,
 ) -> PairedBootstrapResult:
     """Paired-bootstrap comparison of r(A,B), r(A,C), r(B,C).
 
     Parameters mirror MATLAB pairedBootstrapCompareCorrelations.m.
+
+    ceilings: optional dict with keys "AB", "AC", "BC" giving each pair's fixed
+    attenuation ceiling sqrt(rho_SB,X * rho_SB,Y) from the FULL-sample
+    Spearman--Brown reliabilities. When provided, the observed and every
+    bootstrap replicate's correlations are divided by the pair's ceiling before
+    the differences are formed, so the test, straddle p-values, and CIs are on
+    attenuation-CORRECTED differences (reliabilities treated as fixed
+    constants, consistent with reliability_mode='fixed' elsewhere).
     """
     rng = as_rng(rng)
     corr_type = "Spearman" if use_spearman else "Pearson"
@@ -167,6 +176,19 @@ def paired_bootstrap_compare_correlations(
         r_ac_b[b] = _corr(m_a[v], m_c[v], corr_type)
         r_bc_b[b] = _corr(m_b[v], m_c[v], corr_type)
 
+    # ---- optional attenuation correction (fixed ceilings) ----
+    # Divide observed and replicate correlations by each pair's fixed ceiling
+    # sqrt(rho_SB,X * rho_SB,Y) so all downstream diffs/p-values/CIs are on
+    # corrected values. Ceilings are full-sample constants (fixed mode), so
+    # the paired structure of the bootstrap is unaffected.
+    if ceilings is not None:
+        eps = np.finfo(float).eps
+        c_ab = max(float(ceilings["AB"]), eps)
+        c_ac = max(float(ceilings["AC"]), eps)
+        c_bc = max(float(ceilings["BC"]), eps)
+        r_ab_obs, r_ac_obs, r_bc_obs = r_ab_obs / c_ab, r_ac_obs / c_ac, r_bc_obs / c_bc
+        r_ab_b, r_ac_b, r_bc_b = r_ab_b / c_ab, r_ac_b / c_ac, r_bc_b / c_bc
+
     # ---- pairwise differences (paired by construction) ----
     diff_ab_ac = r_ab_b - r_ac_b
     diff_ab_bc = r_ab_b - r_bc_b
@@ -201,9 +223,11 @@ def paired_bootstrap_compare_correlations(
 
     if verbose:
         dim_label = "participant" if bootstrap_dim == 1 else "stimulus"
+        scale_label = "attenuation-corrected" if ceilings is not None else "raw"
         print(
             f"\n=== Paired Bootstrap Comparison ({trial_type.upper()}, "
-            f"{dim_label}-level, {corr_type}, nBoot={n_boot}, minResp={min_resp}) ==="
+            f"{dim_label}-level, {corr_type}, {scale_label}, "
+            f"nBoot={n_boot}, minResp={min_resp}) ==="
         )
         print(f"Observed: r(A,B)={r_ab_obs:.3f}  r(A,C)={r_ac_obs:.3f}  r(B,C)={r_bc_obs:.3f}")
         print("                                                     p (null)  p (straddle)")

@@ -66,7 +66,7 @@ PAIR_LABEL = {("US", "SanBorja"): r"US$-$SB",
 MIN_ISI0_DPRIME = 2.0
 IS_MULTI_ISI = False
 MIN_RESP = 2
-N_SPLITS = 1000      # within-group split-half reps; 10000 is "final"
+N_SPLITS = 1000      # within-group split-half reps (report diagnostic; grid uses 10k for reported reliabilities)
 N_BOOT = 2000        # CI bootstrap
 N_BOOT_PAIRED = 5000
 SEED = 20260603
@@ -185,8 +185,17 @@ def run_one_condition(cond, force_rebuild=False):
             )
             trial_out["pairs_stim"][(a, b)] = res2
 
-        # Paired-bootstrap comparison
+        # Paired-bootstrap comparison on attenuation-CORRECTED differences:
+        # per-pair fixed ceilings sqrt(rho_SB,X * rho_SB,Y) from the full-sample
+        # Spearman--Brown reliabilities, matching the plotted r* (fixed mode).
         print(f"  paired bootstrap ...")
+        sb_of = {g: (res.sb_hit if trial == "hit" else res.sb_fa)
+                 for g, res in groups.items()}
+        ceilings = {
+            "AB": float(np.sqrt(sb_of["US"] * sb_of["SanBorja"])),
+            "AC": float(np.sqrt(sb_of["US"] * sb_of["Tsimane"])),
+            "BC": float(np.sqrt(sb_of["SanBorja"] * sb_of["Tsimane"])),
+        }
         paired = paired_bootstrap_compare_correlations(
             groups["US"], groups["SanBorja"], groups["Tsimane"],
             trial_type=trial,
@@ -194,6 +203,7 @@ def run_one_condition(cond, force_rebuild=False):
             min_resp=MIN_RESP,
             rng=np.random.default_rng(SEED + _stable_hash(f"{cond}|{trial}|paired") % 1_000_000),
             verbose=False,
+            ceilings=ceilings,
         )
         trial_out["paired"] = paired
 
@@ -205,48 +215,65 @@ def run_one_condition(cond, force_rebuild=False):
 # ----------------------------------------------------------------------------
 # Figure: triple bar chart with BCa CIs
 # ----------------------------------------------------------------------------
-def make_bar_figure(cond, trial, pairs_results, paired_result, save_path):
-    points_raw = [r.point_raw for r in pairs_results.values()]
+def make_bar_figure(cond, trial, pairs_results, paired_result, save_path, groups=None):
+    """Attenuation-corrected intergroup correlations with Fisher-z 95% CIs.
+
+    Only the corrected estimate is plotted (raw values and all CI variants stay
+    in the report tables). Error bars are Fisher-z CIs: centered on the point
+    estimate with the width from the bootstrap SD on the z scale. A percentile
+    CI is not used here because participant resampling attenuates every
+    replicate (~63% unique listeners per resample), shifting the whole
+    bootstrap distribution below the point estimate. Cells whose corrected
+    estimate reaches/exceeds 1 (possible when a within-group reliability is
+    very low) fall back to the percentile CI and are flagged with a red x when
+    the point sits outside it. Significance brackets are the paired-bootstrap
+    comparison of the pairs' attenuation-CORRECTED correlations, with each
+    pair's ceiling sqrt(rho_SB,X * rho_SB,Y) treated as a fixed constant
+    (consistent with the plotted r*, fixed mode).
+    """
     points_cor = [r.point_corr for r in pairs_results.values()]
 
-    # Headline error bars are PERCENTILE CIs. BCa misfires in cells with low
-    # within-group reliability (Tsimane' Globalized-Music); the diagnostic
-    # table in the LaTeX report shows BCa and Fisher-z side by side.
-    bca_raw = [r.cis_raw["percentile"] for r in pairs_results.values()]
-    bca_cor = [r.cis_corr["percentile"] for r in pairs_results.values()]
+    def _ci_for(rres):
+        lo, hi = rres.cis_corr.get("fisher_z", (float("nan"), float("nan")))
+        ok = np.isfinite(lo) and np.isfinite(hi) and abs(hi - lo) > 1e-4
+        if not ok or (np.isfinite(rres.point_corr) and rres.point_corr >= 0.999):
+            lo, hi = rres.cis_corr["percentile"]
+        return lo, hi
 
-    n_items = [r.point_items_n for r in pairs_results.values()]
+    cis = [_ci_for(r) for r in pairs_results.values()]
 
-    pair_labels = [PAIR_LABEL[p] for p in pairs_results.keys()]
+    pair_labels = []
+    for p in pairs_results.keys():
+        lab = PAIR_LABEL[p]
+        if groups is not None:
+            a, b = p
+            lab += f"\n$n$ = {groups[a].n_subjects}, {groups[b].n_subjects}"
+        pair_labels.append(lab)
+
     x = np.arange(len(pair_labels))
-    w = 0.35
+    w = 0.55
 
     fig, ax = plt.subplots(figsize=(7.5, 4))
-    raw_bars = ax.bar(x - w/2, points_raw, w, color="#888", label="raw r")
-    cor_bars = ax.bar(x + w/2, points_cor, w, color="#4060b0", label="attenuation-corrected r")
+    ax.bar(x, points_cor, w, color="#4060b0", edgecolor="black", linewidth=0.9,
+           label=r"attenuation-corrected $\hat r^*$")
 
-    # Error bars from BCa. Clip half-widths to >= 0: if BCa shifts the CI
-    # so far that the sample point estimate sits outside the bracket, the
-    # bar visually flattens on one side and we annotate it.
-    def _draw_eb(xi, p, lo, hi):
+    for xi, p, (lo, hi) in zip(x, points_cor, cis):
         if not (np.isfinite(lo) and np.isfinite(hi) and np.isfinite(p)):
-            return
-        lo_half = max(0.0, p - lo)
-        hi_half = max(0.0, hi - p)
-        ax.errorbar([xi], [p], yerr=[[lo_half], [hi_half]],
-                    fmt="none", ecolor="k", capsize=3, lw=1)
+            continue
+        ax.errorbar([xi], [p], yerr=[[max(0.0, p - lo)], [max(0.0, hi - p)]],
+                    fmt="none", ecolor="k", capsize=3, lw=1.1)
         if p < lo or p > hi:
             ax.plot([xi], [p], marker="x", color="red", markersize=7)
-    for xi, p, (lo, hi) in zip(x - w/2, points_raw, bca_raw):
-        _draw_eb(xi, p, lo, hi)
-    for xi, p, (lo, hi) in zip(x + w/2, points_cor, bca_cor):
-        _draw_eb(xi, p, lo, hi)
 
-    # Significance brackets from paired test
+    # after attenuation correction the noise ceiling is r* = 1 by construction
+    ax.axhline(1.0, color="#999", ls="--", lw=1.1)
+    ax.plot([], [], color="#999", ls="--", lw=1.1,
+            label=r"$\hat r^*=1$ (perfect agreement given noise)")
+
+    # Significance brackets from the paired test (on corrected differences)
     ps = (paired_result.ab_vs_ac, paired_result.ab_vs_bc, paired_result.ac_vs_bc)
     pair_idx = [(0, 1), (0, 2), (1, 2)]
-    ymax = max([h for _, h in bca_cor if np.isfinite(h)] +
-               [h for _, h in bca_raw if np.isfinite(h)] + [0])
+    ymax = max([h for _, h in cis if np.isfinite(h)] + [1.0])
     step = max(0.06, 0.08 * abs(ymax))
     for k, ((i, j), p) in enumerate(zip(pair_idx, ps)):
         if not np.isfinite(p):
@@ -259,8 +286,8 @@ def make_bar_figure(cond, trial, pairs_results, paired_result, save_path):
     ax.axhline(0, color="k", lw=0.5, alpha=0.5)
     ax.set_xticks(x)
     ax.set_xticklabels(pair_labels)
-    ax.set_ylabel("intergroup correlation")
-    ax.set_title(f"{cond}  |  {trial.upper()}  (percentile 95\\% CIs; n items: {', '.join(str(n) for n in n_items)})")
+    ax.set_ylabel(r"intergroup correlation ($\hat r^*$)")
+    ax.set_title(f"{cond}  |  {trial.upper()}  (attenuation-corrected; Fisher-z 95% CIs)")
     ax.legend(loc="lower right", fontsize=9)
     plt.tight_layout()
     fig.savefig(save_path, dpi=150)
@@ -343,7 +370,7 @@ PREAMBLE = r"""\documentclass[11pt]{article}
 \maketitle
 
 \section*{Overview}
-Intergroup itemwise correlations and paired-bootstrap comparisons for two conditions (\emph{Globalized-Music}, \emph{Industrial-Nature}) and two trial types (hits and false alarms). All numbers were produced by the Python pipeline in \texttt{Analysis-Scripts-v2/python/}; see \texttt{STATS.md} / \texttt{stats.pdf} for the methods. Bootstrap settings: $n_{\mathrm{boot}}=NBOOT_PLACEHOLDER$ for pairwise CIs, $n_{\mathrm{boot}}=NBOOT_PAIRED_PLACEHOLDER$ for the paired test, attenuation correction in \texttt{fixed} mode, participant-level resampling, \texttt{minResp}\,$=MINRESP_PLACEHOLDER$. Reported CIs are \textbf{percentile}: $\bigl[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}\bigr]$ of the bootstrap distribution. Fisher-$z$ back-transformed and BCa alternatives are shown in the diagnostic table beneath each headline. BCa was considered as the headline (it is the textbook recommendation for skewed bootstraps) but misfires in cells with low within-group reliability --- for those cells the bias correction $\hat z_0$ is so large that $\hat r$ falls at or outside the BCa interval. The percentile CI is conservative under skew (wider than warranted) but doesn't break in that pathological way and is therefore the safer headline. The default $p$-value is the recentered-null variant.
+Intergroup itemwise correlations and paired-bootstrap comparisons for three conditions (\emph{Globalized-Music}, \emph{Industrial-Nature}, \emph{NHS}) and two trial types (hits and false alarms). All numbers were produced by the Python pipeline in \texttt{Analysis-Scripts-v2/python/}; see \texttt{STATS.md} / \texttt{stats.pdf} for the methods. Bootstrap settings: $n_{\mathrm{boot}}=NBOOT_PLACEHOLDER$ for pairwise CIs, $n_{\mathrm{boot}}=NBOOT_PAIRED_PLACEHOLDER$ for the paired test, attenuation correction in \texttt{fixed} mode, participant-level resampling, \texttt{minResp}\,$=MINRESP_PLACEHOLDER$. The paired test compares \emph{attenuation-corrected} correlations: each pair's observed and replicate correlations are divided by the fixed ceiling $\sqrt{\hat\rho_{\mathrm{SB},A}\,\hat\rho_{\mathrm{SB},B}}$ (full-sample Spearman--Brown reliabilities) before the differences are formed. Reported CIs are \textbf{percentile}: $\bigl[\mathrm{P}_{2.5}, \mathrm{P}_{97.5}\bigr]$ of the bootstrap distribution. Fisher-$z$ back-transformed and BCa alternatives are shown in the diagnostic table beneath each headline. BCa was considered as the headline (it is the textbook recommendation for skewed bootstraps) but misfires in cells with low within-group reliability --- for those cells the bias correction $\hat z_0$ is so large that $\hat r$ falls at or outside the BCa interval. The percentile CI is conservative under skew (wider than warranted) but doesn't break in that pathological way and is therefore the safer headline. The default $p$-value is the recentered-null variant.
 
 """
 
@@ -435,7 +462,7 @@ def emit_intergroup_table(f, cond, trial, trial_results):
         f.write(r"\end{center}" + "\n\n")
 
     # Paired test table
-    f.write(r"\subsection*{Paired-bootstrap comparison}" + "\n")
+    f.write(r"\subsection*{Paired-bootstrap comparison (attenuation-corrected differences)}" + "\n")
     f.write(r"\begin{center}" + "\n")
     f.write(r"\begin{tabular}{lcccc}" + "\n")
     f.write(r"\toprule" + "\n")
@@ -590,7 +617,7 @@ def main():
         for trial in TRIAL_TYPES:
             trial_results = out["trials"][trial]
             fig_path = FIG_DIR / f"bar_{cond}_{trial}.png"
-            make_bar_figure(cond, trial, trial_results["pairs"], trial_results["paired"], fig_path)
+            make_bar_figure(cond, trial, trial_results["pairs"], trial_results["paired"], fig_path, out["groups"])
             print(f"  wrote {fig_path}")
             ci_path = FIG_DIR / f"ci_compare_{cond}_{trial}.png"
             make_ci_comparison_figure(cond, trial, trial_results["pairs"], ci_path)
